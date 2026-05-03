@@ -554,7 +554,7 @@ function renderVideoGen() {
                 d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
             Nova aba
           </a>
-          <a id="dl-link" href="/api/video" download="video_images.mp4"
+          <a id="dl-link" href="/api/video/download" download="video_images.mp4"
             class="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -562,7 +562,7 @@ function renderVideoGen() {
             Download
           </a>
         </div>
-        <video id="video-player" src="${videoSrc}" controls preload="metadata"
+        <video id="video-player" src="${videoDone ? videoSrc : ''}" controls preload="metadata"
           class="w-full bg-black" style="max-height:420px"
           onerror="document.getElementById('video-error').classList.remove('hidden')">
         </video>
@@ -572,7 +572,7 @@ function renderVideoGen() {
               d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
           Erro ao reproduzir no player embutido. Use
           <a href="/outputs/video_images.mp4" target="_blank" class="text-blue-400 underline">Nova aba</a>
-          ou <a href="/api/video" download class="text-blue-400 underline">Download</a>.
+          ou <a href="/api/video/download" download class="text-blue-400 underline">Download</a>.
         </div>
       </div>
     </div>
@@ -605,7 +605,9 @@ function updateVideoGenUI() {
       vid.classList.remove('hidden');
       const player = document.getElementById('video-player');
       if (player) {
-        player.src = `/outputs/video_images.mp4?t=${Date.now()}`;
+        document.getElementById('video-error')?.classList.add('hidden');
+        player.onerror = () => document.getElementById('video-error')?.classList.remove('hidden');
+        player.src = `/api/video?t=${Date.now()}`;
         player.load();
       }
     }

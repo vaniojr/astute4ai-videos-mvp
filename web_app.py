@@ -11,7 +11,7 @@ from typing import Optional
 
 import requests as _req
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -92,7 +92,7 @@ async def api_output(filename: str):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-# ── video download (kept for download link; player uses /outputs/ static mount) ─
+# ── video streaming (player inline) ────────────────────────────────────────────
 
 @app.get("/api/video")
 async def api_video(request: Request):
@@ -135,12 +135,21 @@ async def api_video(request: Request):
         "Accept-Ranges": "bytes",
         "Content-Length": str(length),
         "Content-Type": "video/mp4",
-        "Content-Disposition": "attachment; filename=\"video_images.mp4\"",
     }
     if status == 206:
         headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
 
     return StreamingResponse(_iter(), status_code=status, headers=headers)
+
+
+@app.get("/api/video/download")
+async def api_video_download(request: Request):
+    """Mesmo endpoint mas força download via Content-Disposition."""
+    path = OUTPUTS / "video_images.mp4"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Vídeo ainda não gerado")
+    return FileResponse(str(path), media_type="video/mp4",
+                        filename="video_images.mp4")
 
 
 # ── approval ───────────────────────────────────────────────────────────────────
