@@ -125,7 +125,7 @@ def collect_news():
 
 # ── OpenAI helper ──────────────────────────────────────────────────────────────
 
-def ai_call(system: str, user: str, step_num: int) -> str:
+def ai_call(system: str, user: str, step_num: int, max_tokens: int = 16384) -> str:
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         step_error(
@@ -146,9 +146,17 @@ def ai_call(system: str, user: str, step_num: int) -> str:
             {"role": "user",   "content": user},
         ],
         temperature=0.4,
-        max_tokens=4096,
+        max_tokens=max_tokens,
+        response_format={"type": "json_object"},
     )
-    text = resp.choices[0].message.content.strip()
+    choice = resp.choices[0]
+    text   = choice.message.content.strip()
+
+    # warn if model stopped due to length (response may be truncated)
+    if choice.finish_reason == "length":
+        log(f"  ⚠ Resposta truncada por limite de tokens (finish_reason=length)."
+            f" max_tokens={max_tokens}")
+
     text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.MULTILINE)
     text = re.sub(r"\n?```\s*$",           "", text, flags=re.MULTILINE)
     return text.strip()
@@ -161,6 +169,7 @@ def run_ai_stage(
     input_files: list[str],
     output_file: str,
     extra: str = "",
+    max_tokens: int = 16384,
 ) -> dict:
     step_start(step_num, step_name)
 
@@ -179,7 +188,7 @@ def run_ai_stage(
         f"{extra}"
     )
 
-    raw = ai_call(system, user, step_num)
+    raw = ai_call(system, user, step_num, max_tokens=max_tokens)
 
     try:
         data = json.loads(raw)
