@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Astute4AI · Videos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    .mono { font-family: ui-monospace, 'SF Mono', 'Fira Code', 'Courier New', monospace; }
+    .jk  { color: #93c5fd; }
+    .js  { color: #86efac; }
+    .jn  { color: #fde68a; }
+    .jb  { color: #f9a8d4; }
+    .jnl { color: #6b7280; }
+    @keyframes spin   { to { transform: rotate(360deg); } }
+    @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:.4} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+    .spin    { animation: spin 1s linear infinite; display:inline-block; }
+    .pulse   { animation: pulse 2s ease-in-out infinite; }
+    .fade-in { animation: fadeIn .2s ease; }
+    ::-webkit-scrollbar       { width:5px; height:5px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:#374151; border-radius:3px; }
+    .terminal-line.err { color:#f87171; }
+    .terminal-line.ok  { color:#4ade80; }
+  </style>
+</head>
+<body class="bg-[#080810] text-gray-200 h-screen flex flex-col overflow-hidden">
+
+<!-- ── Header ── -->
+<header class="h-12 border-b border-gray-800 flex items-center px-5 gap-3 flex-shrink-0 bg-[#0b0b15]">
+  <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-[10px] font-black select-none">A</div>
+  <span class="font-semibold text-sm tracking-tight">Astute4AI <span class="text-gray-600 font-normal">/ Videos</span></span>
+  <div class="ml-auto flex items-center gap-3">
+    <span id="running-badge" class="hidden items-center gap-1.5 text-xs text-amber-400 pulse">
+      <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
+      Gerando vídeo...
+    </span>
+    <button onclick="showResetModal()"
+      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400
+             hover:border-blue-600 hover:text-blue-400 transition-all">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 4v1m0 14v1M4.22 4.22l.707.707m12.727 12.727.707.707M1 12h1m20 0h1M4.22 19.78l.707-.707M18.657 5.343l.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+      </svg>
+      Novo Vídeo
+    </button>
+    <span class="text-[11px] text-gray-700" id="ts"></span>
+  </div>
+</header>
+
+<!-- ── Body ── -->
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- ── Sidebar ── -->
+  <aside class="w-60 border-r border-gray-800 flex flex-col bg-[#0b0b15] flex-shrink-0">
+    <div class="px-4 pt-4 pb-2">
+      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Pipeline</p>
+    </div>
+    <nav id="steps-nav" class="overflow-y-auto px-2 pb-2 space-y-px"></nav>
+
+    <div class="px-4 pt-3 pb-2 border-t border-gray-800 mt-1">
+      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Configurações</p>
+    </div>
+    <nav class="px-2 pb-4 space-y-px">
+      <button id="nav-sources" onclick="showSources()"
+        class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+        </svg>
+        Fontes de Notícias
+      </button>
+    </nav>
+
+    <div class="mt-auto p-3 border-t border-gray-800">
+      <button onclick="showDashboard()"
+        class="w-full flex items-center gap-2 px-3 py-2 rounded text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7m-9 2v8m4-8v8m5 0H3"/>
+        </svg>
+        Dashboard
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main id="main" class="flex-1 overflow-y-auto"></main>
+</div>
+
+<!-- ── Reset Modal ── -->
+<div id="reset-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+  <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm fade-in">
+    <div class="flex items-start gap-3 mb-5">
+      <div class="w-9 h-9 rounded-full bg-amber-900/40 border border-amber-800 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="font-semibold text-sm">Criar Novo Vídeo</h3>
+        <p class="text-xs text-gray-500 mt-1">Todos os arquivos de saída gerados serão apagados e o pipeline reiniciado do zero.</p>
+      </div>
+    </div>
+    <label class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 cursor-pointer mb-5 text-sm">
+      <input type="checkbox" id="reset-keep-video" class="w-4 h-4 rounded accent-blue-600" />
+      <span>Manter vídeo atual (<code class="mono text-[11px]">video_images.mp4</code>)</span>
+    </label>
+    <div class="flex gap-2">
+      <button onclick="closeResetModal()"
+        class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-400 hover:bg-gray-800 transition-colors">
+        Cancelar
+      </button>
+      <button onclick="confirmReset()"
+        class="flex-1 px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white text-sm font-medium transition-colors">
+        Apagar e Reiniciar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+let state      = { steps: [], running: false, approval: null };
+let activeStep = null;   // number | 'sources'
+let sseSource  = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bootstrap
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  await loadStatus();
+  showDashboard();
+  setInterval(loadStatus, 4000);
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/status');
+    state = await r.json();
+    renderSidebar();
+    document.getElementById('ts').textContent = new Date().toLocaleTimeString('pt-BR');
+    const badge = document.getElementById('running-badge');
+    if (state.running) badge.classList.replace('hidden', 'flex');
+    else               badge.classList.replace('flex', 'hidden');
+    if (typeof activeStep === 'number') refreshMain();
+  } catch (_) {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sidebar
+// ─────────────────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const nav = document.getElementById('steps-nav');
+  nav.innerHTML = state.steps.map(s => {
+    const isActive = activeStep === s.id;
+    return `
+    <button class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs transition-all
+      ${isActive ? 'bg-blue-950 text-blue-300' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"
+      onclick="selectStep(${s.id})">
+      ${stepIcon(s)}
+      <span class="flex-1 truncate">${s.name}</span>
+    </button>`;
+  }).join('');
+
+  const srcBtn = document.getElementById('nav-sources');
+  if (activeStep === 'sources') {
+    srcBtn.classList.add('bg-blue-950', 'text-blue-300');
+    srcBtn.classList.remove('text-gray-400');
+  } else {
+    srcBtn.classList.remove('bg-blue-950', 'text-blue-300');
+    srcBtn.classList.add('text-gray-400');
+  }
+}
+
+function stepIcon(s) {
+  if (s.id === 9 && state.running) {
+    return `<span class="w-5 h-5 rounded-full border-2 border-amber-500 border-t-transparent spin flex-shrink-0"></span>`;
+  }
+  if (s.done) {
+    return `<span class="w-5 h-5 rounded-full bg-green-700 flex items-center justify-center flex-shrink-0">
+      <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></span>`;
+  }
+  return `<span class="w-5 h-5 rounded-full border border-gray-700 flex items-center justify-center text-[9px] text-gray-600 flex-shrink-0 font-bold">${s.id}</span>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard
+// ─────────────────────────────────────────────────────────────────────────────
+function showDashboard() {
+  activeStep = null;
+  renderSidebar();
+  const done     = state.steps.filter(s => s.done).length;
+  const total    = state.steps.length;
+  const pct      = Math.round((done / total) * 100);
+  const approved = state.approval?.decision === 'approved';
+  const rejected = state.approval?.decision === 'rejected';
+
+  document.getElementById('main').innerHTML = `
+  <div class="max-w-2xl mx-auto p-8 fade-in">
+    <h1 class="text-2xl font-bold mb-1">Dashboard</h1>
+    <p class="text-gray-500 text-sm mb-8">Acompanhe e controle o pipeline de geração de vídeos.</p>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium">Progresso do pipeline</span>
+        <span class="text-sm font-bold text-blue-400">${done} / ${total}</span>
+      </div>
+      <div class="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div class="h-full bg-blue-600 rounded-full transition-all" style="width:${pct}%"></div>
+      </div>
+      <p class="mt-2 text-xs text-gray-600">${pct}% concluído</p>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      ${statCard('Etapas', `${done}/${total}`, 'text-blue-400')}
+      ${statCard('Aprovação',
+          state.approval ? (approved ? 'Aprovado' : 'Rejeitado') : 'Pendente',
+          approved ? 'text-green-400' : rejected ? 'text-red-400' : 'text-gray-500')}
+      ${statCard('Vídeo',
+          state.steps.find(s=>s.id===9)?.done ? 'Pronto' : 'Pendente',
+          state.steps.find(s=>s.id===9)?.done ? 'text-green-400' : 'text-gray-500')}
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Ações rápidas</p>
+      <div class="space-y-2">
+        ${quickAction(8, 'Aprovar Roteiro', 'Revise e aprove o script gerado',
+            'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'text-blue-400')}
+        ${quickAction(9, 'Gerar Vídeo', 'Execute generate_video_images.py com logs ao vivo',
+            'M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z',
+            'text-purple-400')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function statCard(label, value, cls) {
+  return `<div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <p class="text-[11px] text-gray-600 mb-1">${label}</p>
+    <p class="text-lg font-bold ${cls}">${value}</p>
+  </div>`;
+}
+
+function quickAction(stepId, title, sub, iconPath, iconCls) {
+  return `
+  <button onclick="selectStep(${stepId})"
+    class="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-700
+           hover:border-blue-700 hover:bg-blue-950/30 transition-all text-sm text-left group">
+    <svg class="w-4 h-4 ${iconCls} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}"/>
+    </svg>
+    <div>
+      <p class="font-medium">${title}</p>
+      <p class="text-xs text-gray-500 mt-0.5">${sub}</p>
+    </div>
+    <svg class="w-4 h-4 ml-auto text-gray-700 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+  </button>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step selection
+// ─────────────────────────────────────────────────────────────────────────────
+async function selectStep(id) {
+  activeStep = id;
+  renderSidebar();
+  const step = state.steps.find(s => s.id === id);
+  if (!step) return;
+  if (id === 8) { renderApproval(); return; }
+  if (id === 9) { renderVideoGen(); return; }
+  if (!step.done) { renderNotReady(step); return; }
+  document.getElementById('main').innerHTML = loadingView(step.name);
+  try {
+    const data = await fetch(`/api/output/${step.output}`).then(r => r.json());
+    renderJsonStep(step, data);
+  } catch (e) { renderError('Erro ao carregar: ' + e.message); }
+}
+
+function refreshMain() {
+  if (activeStep === 9) updateVideoGenUI();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON viewer
+// ─────────────────────────────────────────────────────────────────────────────
+function renderJsonStep(step, data) {
+  window._jsonData = data;
+  document.getElementById('main').innerHTML = `
+  <div class="p-6 fade-in">
+    <div class="flex items-center gap-3 mb-6">
+      <span class="w-7 h-7 rounded-full bg-green-700 flex items-center justify-center">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+      </span>
+      <div>
+        <h2 class="text-lg font-semibold">${step.name}</h2>
+        <p class="text-xs text-gray-500 mono">${step.output}</p>
+      </div>
+      <button onclick="copyJson()" class="ml-auto text-xs text-gray-600 hover:text-gray-300 transition-colors px-3 py-1.5 border border-gray-800 rounded-lg">
+        Copiar JSON
+      </button>
+    </div>
+    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
+      <div class="px-4 py-2 border-b border-gray-800 bg-gray-900 text-xs text-gray-600 mono">outputs/${step.output}</div>
+      <pre class="mono text-[12px] leading-relaxed p-5 overflow-x-auto max-h-[calc(100vh-220px)]">${syntaxHighlight(data)}</pre>
+    </div>
+  </div>`;
+}
+
+function copyJson() {
+  navigator.clipboard.writeText(JSON.stringify(window._jsonData, null, 2));
+}
+
+function renderNotReady(step) {
+  document.getElementById('main').innerHTML = `
+  <div class="p-6 fade-in">
+    <div class="flex items-center gap-3 mb-6">
+      <span class="w-7 h-7 rounded-full border border-gray-700 flex items-center justify-center text-xs text-gray-600 font-bold">${step.id}</span>
+      <div>
+        <h2 class="text-lg font-semibold">${step.name}</h2>
+        <p class="text-xs text-gray-500 mono">${step.output}</p>
+      </div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+      <p class="text-gray-500 text-sm">Etapa ainda não executada.</p>
+      <p class="text-gray-700 text-xs mt-1">Execute o pipeline para gerar <code class="mono">${step.output}</code></p>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 8 — Approval
+// ─────────────────────────────────────────────────────────────────────────────
+async function renderApproval() {
+  const step = state.steps.find(s => s.id === 4);
+  if (!step?.done) {
+    document.getElementById('main').innerHTML = `
+    <div class="p-6 fade-in">
+      <h2 class="text-lg font-semibold mb-4">Aprovação do Roteiro</h2>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+        <p class="text-gray-500 text-sm">Roteiro ainda não gerado. Execute as etapas 1–4 primeiro.</p>
+      </div>
+    </div>`;
+    return;
+  }
+  document.getElementById('main').innerHTML = loadingView('Aprovação do Roteiro');
+  const data = await fetch('/api/output/script_validated.json').then(r => r.json());
+  const segs  = data.segments || [];
+  const apr   = state.approval;
+
+  document.getElementById('main').innerHTML = `
+  <div class="p-6 max-w-3xl fade-in">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-lg font-semibold">Aprovação do Roteiro</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Revise o script antes de gerar o vídeo</p>
+      </div>
+      <div id="approval-badge">${approvalBadge(apr)}</div>
+    </div>
+
+    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden mb-6">
+      <div class="px-4 py-2.5 border-b border-gray-800 bg-gray-900 text-xs text-gray-500">
+        script_validated.json · ${segs.length} segmentos · ~${data.estimated_duration_min?.toFixed(1)} min
+      </div>
+      <div class="divide-y divide-gray-800/50 max-h-96 overflow-y-auto">
+        ${segs.map(s => `
+        <div class="px-5 py-3.5">
+          <span class="inline-block text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded
+            ${segTypeColor(s.type)} mb-2">${s.type}${s.news_ref ? ' #'+s.news_ref : ''}</span>
+          <p class="text-sm text-gray-300 leading-relaxed">${escHtml(s.text)}</p>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Decisão</p>
+      <div class="flex gap-3 mb-4">
+        <button onclick="decide('approved')"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Aprovar
+        </button>
+        <button onclick="decide('rejected')"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-900 hover:bg-red-800 text-white text-sm font-medium transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          Rejeitar
+        </button>
+      </div>
+      <textarea id="approval-notes" rows="2" placeholder="Observações (opcional)..."
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300
+               placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"></textarea>
+    </div>
+  </div>`;
+}
+
+function approvalBadge(apr) {
+  if (!apr) return `<span class="px-3 py-1 text-xs rounded-full bg-gray-800 text-gray-500">Pendente</span>`;
+  if (apr.decision === 'approved')
+    return `<span class="px-3 py-1 text-xs rounded-full bg-green-900/50 text-green-400 border border-green-800">Aprovado</span>`;
+  return `<span class="px-3 py-1 text-xs rounded-full bg-red-900/50 text-red-400 border border-red-900">Rejeitado</span>`;
+}
+
+async function decide(decision) {
+  const notes = document.getElementById('approval-notes')?.value || '';
+  await fetch('/api/approve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision, notes }),
+  });
+  await loadStatus();
+  renderApproval();
+}
+
+function segTypeColor(type) {
+  const map = { intro:'bg-blue-900/50 text-blue-400', outro:'bg-purple-900/50 text-purple-400',
+                news_block:'bg-amber-900/50 text-amber-400', transition:'bg-gray-800 text-gray-500' };
+  return map[type] || 'bg-gray-800 text-gray-500';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Step 9 — Video Generation
+// ─────────────────────────────────────────────────────────────────────────────
+function renderVideoGen() {
+  const videoDone = state.steps.find(s => s.id === 9)?.done;
+  const approved  = state.approval?.decision === 'approved';
+  // Cache-bust so the browser fetches the new video after regeneration
+  const videoSrc  = `/outputs/video_images.mp4?t=${Date.now()}`;
+
+  document.getElementById('main').innerHTML = `
+  <div class="p-6 fade-in">
+    <div class="flex items-center gap-3 mb-6">
+      <div>
+        <h2 class="text-lg font-semibold">Geração do Vídeo</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Pexels + gTTS + MoviePy · sem custo</p>
+      </div>
+      <div class="ml-auto flex gap-2">
+        <button id="btn-run" onclick="startVideo()"
+          ${state.running ? 'disabled' : ''}
+          class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                 ${state.running ? 'bg-gray-800 text-gray-600 cursor-not-allowed' :
+                   'bg-blue-600 hover:bg-blue-500 text-white'}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          ${state.running ? 'Gerando...' : 'Gerar Vídeo'}
+        </button>
+        <button id="btn-cancel" onclick="cancelVideo()"
+          class="${state.running ? '' : 'hidden'} px-4 py-2 rounded-lg text-sm text-red-400 border border-red-900 hover:bg-red-950 transition-colors">
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+    ${!approved ? `
+    <div class="bg-amber-950/30 border border-amber-900/50 rounded-xl px-4 py-3 mb-5 flex items-center gap-2 text-sm text-amber-400">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      </svg>
+      Roteiro não aprovado. Aprove na etapa 8 antes de gerar o vídeo.
+    </div>` : ''}
+
+    <!-- Terminal -->
+    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden mb-6">
+      <div class="flex items-center gap-2 px-4 py-2.5 border-b border-gray-800 bg-gray-900">
+        <div class="flex gap-1.5">
+          <span class="w-3 h-3 rounded-full bg-red-700"></span>
+          <span class="w-3 h-3 rounded-full bg-yellow-700"></span>
+          <span class="w-3 h-3 rounded-full bg-green-700"></span>
+        </div>
+        <span class="text-xs text-gray-600 ml-1 mono">generate_video_images.py</span>
+        <span id="term-status" class="ml-auto text-[10px] text-gray-700">aguardando</span>
+      </div>
+      <div id="terminal" class="mono text-xs leading-5 p-4 h-64 overflow-y-auto bg-gray-950 text-gray-400">
+        <span class="text-gray-700">$ python3 generate_video_images.py</span>
+      </div>
+    </div>
+
+    <!-- Player -->
+    <div id="video-section" class="${videoDone ? '' : 'hidden'}">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-gray-800 flex items-center gap-3">
+          <span class="text-xs text-gray-500 flex-1">outputs/video_images.mp4</span>
+          <a href="/outputs/video_images.mp4" target="_blank"
+            class="text-xs text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            Nova aba
+          </a>
+          <a id="dl-link" href="/api/video" download="video_images.mp4"
+            class="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Download
+          </a>
+        </div>
+        <video id="video-player" src="${videoSrc}" controls preload="metadata"
+          class="w-full bg-black" style="max-height:420px"
+          onerror="document.getElementById('video-error').classList.remove('hidden')">
+        </video>
+        <div id="video-error" class="hidden px-4 py-3 bg-red-950/40 border-t border-red-900 text-xs text-red-400 flex items-center gap-2">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+          Erro ao reproduzir no player embutido. Use
+          <a href="/outputs/video_images.mp4" target="_blank" class="text-blue-400 underline">Nova aba</a>
+          ou <a href="/api/video" download class="text-blue-400 underline">Download</a>.
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  if (state.running) connectSSE();
+}
+
+function updateVideoGenUI() {
+  const btn    = document.getElementById('btn-run');
+  const cancel = document.getElementById('btn-cancel');
+  const status = document.getElementById('term-status');
+  if (!btn) return;
+
+  if (state.running) {
+    btn.disabled = true;
+    btn.className = btn.className.replace('bg-blue-600 hover:bg-blue-500 text-white',
+                                          'bg-gray-800 text-gray-600 cursor-not-allowed');
+    cancel?.classList.remove('hidden');
+    if (status) status.textContent = 'executando...';
+  } else {
+    btn.disabled = false;
+    btn.className = btn.className.replace('bg-gray-800 text-gray-600 cursor-not-allowed',
+                                          'bg-blue-600 hover:bg-blue-500 text-white');
+    cancel?.classList.add('hidden');
+    if (status) status.textContent = 'concluído';
+
+    const vid = document.getElementById('video-section');
+    if (vid && state.steps.find(s=>s.id===9)?.done) {
+      vid.classList.remove('hidden');
+      const player = document.getElementById('video-player');
+      if (player) {
+        player.src = `/outputs/video_images.mp4?t=${Date.now()}`;
+        player.load();
+      }
+    }
+  }
+}
+
+async function startVideo() {
+  try {
+    const r = await fetch('/api/generate', { method: 'POST' });
+    if (!r.ok) { const e = await r.json(); alert(e.detail || 'Erro'); return; }
+    await loadStatus();
+    updateVideoGenUI();
+    connectSSE();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+async function cancelVideo() {
+  await fetch('/api/cancel', { method: 'POST' });
+  await loadStatus();
+  updateVideoGenUI();
+  if (sseSource) { sseSource.close(); sseSource = null; }
+}
+
+function connectSSE() {
+  if (sseSource) sseSource.close();
+  sseSource = new EventSource('/api/logs');
+  const term = document.getElementById('terminal');
+  if (!term) { sseSource.close(); sseSource = null; return; }
+
+  sseSource.onmessage = e => {
+    const div = document.createElement('div');
+    div.className = 'terminal-line';
+    if (/erro|error|fail/i.test(e.data))           div.classList.add('err');
+    else if (/✓|pronto|done|mp4|pronto/i.test(e.data)) div.classList.add('ok');
+    div.textContent = e.data;
+    term.appendChild(div);
+    term.scrollTop = term.scrollHeight;
+  };
+  sseSource.addEventListener('done', () => {
+    sseSource.close(); sseSource = null;
+    loadStatus().then(updateVideoGenUI);
+    const s = document.getElementById('term-status');
+    if (s) s.textContent = 'concluído';
+  });
+  sseSource.onerror = () => { if (sseSource?.readyState === EventSource.CLOSED) sseSource = null; };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Novo Vídeo (reset modal)
+// ─────────────────────────────────────────────────────────────────────────────
+function showResetModal() {
+  document.getElementById('reset-modal').classList.remove('hidden');
+  document.getElementById('reset-keep-video').checked = false;
+}
+
+function closeResetModal() {
+  document.getElementById('reset-modal').classList.add('hidden');
+}
+
+async function confirmReset() {
+  const keepVideo = document.getElementById('reset-keep-video').checked;
+  closeResetModal();
+  try {
+    await fetch('/api/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keep_video: keepVideo }),
+    });
+    await loadStatus();
+    showDashboard();
+  } catch (e) { alert('Erro ao resetar: ' + e.message); }
+}
+
+// Close modal when clicking backdrop
+document.getElementById('reset-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeResetModal();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sources management
+// ─────────────────────────────────────────────────────────────────────────────
+let sourcesData = [];
+
+async function showSources() {
+  activeStep = 'sources';
+  renderSidebar();
+  document.getElementById('main').innerHTML = loadingView('Fontes de Notícias');
+  try {
+    const r = await fetch('/api/sources');
+    const d = await r.json();
+    sourcesData = d.sources || [];
+    renderSourcesView();
+  } catch (e) { renderError('Erro ao carregar fontes: ' + e.message); }
+}
+
+function renderSourcesView() {
+  document.getElementById('main').innerHTML = `
+  <div class="p-6 max-w-3xl fade-in">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-lg font-semibold">Fontes de Notícias</h2>
+        <p class="text-xs text-gray-500 mt-0.5">${sourcesData.length} fonte(s) configurada(s)</p>
+      </div>
+      <button onclick="addSourceRow()"
+        class="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Adicionar
+      </button>
+    </div>
+
+    <div id="sources-list" class="space-y-3"></div>
+
+    <div id="add-form" class="hidden mt-4 bg-gray-900 border border-blue-900/60 rounded-xl p-5 fade-in">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Nova fonte</p>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Nome</label>
+          <input id="new-name" type="text" placeholder="Ex: G1 Política"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-600"/>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Tipo</label>
+          <select id="new-type"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-600">
+            <option value="rss">RSS</option>
+            <option value="web">Web</option>
+          </select>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="text-xs text-gray-500 mb-1 block">URL do Feed / Site</label>
+        <input id="new-url" type="url" placeholder="https://..."
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-600"/>
+      </div>
+      <div class="flex gap-2 justify-end">
+        <button onclick="cancelAddSource()"
+          class="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-400 hover:bg-gray-800 transition-colors">
+          Cancelar
+        </button>
+        <button onclick="saveNewSource()"
+          class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+          Salvar
+        </button>
+      </div>
+    </div>
+  </div>`;
+
+  renderSourcesList();
+}
+
+function renderSourcesList() {
+  const list = document.getElementById('sources-list');
+  if (!list) return;
+  if (sourcesData.length === 0) {
+    list.innerHTML = `<div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500 text-sm">
+      Nenhuma fonte configurada. Adicione uma fonte acima.</div>`;
+    return;
+  }
+  list.innerHTML = sourcesData.map((src, i) => `
+  <div class="bg-gray-900 border ${src.enabled ? 'border-gray-800' : 'border-gray-800/40 opacity-60'} rounded-xl p-4">
+    <div class="flex items-start gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="font-medium text-sm">${escHtml(src.name)}</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono uppercase">${src.type}</span>
+          ${src.enabled
+            ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-green-900/40 text-green-500 border border-green-900/50">ativo</span>`
+            : `<span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-600">inativo</span>`}
+        </div>
+        <p class="text-xs text-gray-600 mono truncate">${escHtml(src.feed_url || src.url || '')}</p>
+        <div id="test-result-${i}" class="mt-1.5 text-xs hidden"></div>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <button onclick="testSource(${i})" id="test-btn-${i}"
+          class="px-2.5 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:border-blue-700 hover:text-blue-400 transition-colors">
+          Testar
+        </button>
+        <button onclick="toggleSource(${i})"
+          class="px-2.5 py-1.5 rounded-lg text-xs border border-gray-700 ${src.enabled ? 'text-gray-400 hover:text-red-400 hover:border-red-900' : 'text-gray-500 hover:text-green-400 hover:border-green-900'} transition-colors">
+          ${src.enabled ? 'Desativar' : 'Ativar'}
+        </button>
+        <button onclick="deleteSource(${i})"
+          class="p-1.5 rounded-lg text-xs border border-gray-700 text-gray-600 hover:text-red-400 hover:border-red-900 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>`).join('');
+}
+
+async function testSource(i) {
+  const src = sourcesData[i];
+  const url = src.feed_url || src.url;
+  const btn = document.getElementById(`test-btn-${i}`);
+  const res = document.getElementById(`test-result-${i}`);
+  if (!btn || !res) return;
+
+  btn.disabled = true;
+  btn.textContent = '...';
+  res.className = 'mt-1.5 text-xs';
+  res.textContent = 'Testando...';
+
+  try {
+    const r = await fetch('/api/sources/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      res.className = 'mt-1.5 text-xs text-green-400';
+      res.textContent = `✓ Online (HTTP ${d.status})`;
+    } else {
+      res.className = 'mt-1.5 text-xs text-red-400';
+      res.textContent = d.error ? `✗ ${d.error}` : `✗ HTTP ${d.status}`;
+    }
+  } catch (e) {
+    res.className = 'mt-1.5 text-xs text-red-400';
+    res.textContent = `✗ Erro: ${e.message}`;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Testar';
+}
+
+function toggleSource(i) {
+  sourcesData[i].enabled = !sourcesData[i].enabled;
+  saveSources().then(() => renderSourcesList());
+}
+
+function deleteSource(i) {
+  if (!confirm(`Remover "${sourcesData[i].name}"?`)) return;
+  sourcesData.splice(i, 1);
+  saveSources().then(() => renderSourcesList());
+}
+
+function addSourceRow() {
+  document.getElementById('add-form')?.classList.remove('hidden');
+}
+
+function cancelAddSource() {
+  document.getElementById('add-form')?.classList.add('hidden');
+}
+
+async function saveNewSource() {
+  const name = document.getElementById('new-name')?.value.trim();
+  const url  = document.getElementById('new-url')?.value.trim();
+  const type = document.getElementById('new-type')?.value || 'rss';
+  if (!name || !url) { alert('Preencha nome e URL.'); return; }
+  sourcesData.push({ name, url, feed_url: url, type, country: 'BR', language: 'pt-BR', enabled: true });
+  await saveSources();
+  cancelAddSource();
+  renderSourcesList();
+  document.getElementById('new-name').value = '';
+  document.getElementById('new-url').value  = '';
+}
+
+async function saveSources() {
+  await fetch('/api/sources', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sources: sourcesData }),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON syntax highlighting
+// ─────────────────────────────────────────────────────────────────────────────
+function syntaxHighlight(obj, depth = 0) {
+  if (obj === null)             return `<span class="jnl">null</span>`;
+  if (typeof obj === 'boolean') return `<span class="jb">${obj}</span>`;
+  if (typeof obj === 'number')  return `<span class="jn">${obj}</span>`;
+  if (typeof obj === 'string')  return `<span class="js">"${escHtml(obj)}"</span>`;
+  const pad = '  '.repeat(depth + 1), cpad = '  '.repeat(depth);
+  if (Array.isArray(obj)) {
+    if (!obj.length) return '[]';
+    return `[\n${obj.map(v => pad + syntaxHighlight(v, depth+1)).join(',\n')}\n${cpad}]`;
+  }
+  const keys = Object.keys(obj);
+  if (!keys.length) return '{}';
+  const items = keys.map(k => `${pad}<span class="jk">"${escHtml(k)}"</span>: ${syntaxHighlight(obj[k], depth+1)}`);
+  return `{\n${items.join(',\n')}\n${cpad}}`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function loadingView(title) {
+  return `<div class="p-6 flex items-center gap-3 text-gray-500 fade-in">
+    <span class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full spin"></span>
+    <span class="text-sm">${title}...</span>
+  </div>`;
+}
+
+function renderError(msg) {
+  document.getElementById('main').innerHTML = `
+  <div class="p-6"><div class="bg-red-950/30 border border-red-900 rounded-xl p-5 text-red-400 text-sm">${msg}</div></div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Start
+// ─────────────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

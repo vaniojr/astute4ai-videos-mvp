@@ -297,14 +297,25 @@ def main():
     print(f"\nMontando {len(all_clips)} clipes → {OUTPUT_VIDEO.name} ...")
     from moviepy.editor import concatenate_videoclips
     final = concatenate_videoclips(all_clips, method="compose")
+    tmp_output = OUTPUT_VIDEO.with_suffix(".tmp.mp4")
     final.write_videofile(
-        str(OUTPUT_VIDEO),
+        str(tmp_output),
         fps=cfg["fps"],
         codec="libx264",
         audio_codec="aac",
         temp_audiofile=str(TEMP_DIR / "_tmp_audio.m4a"),
         remove_temp=True,
     )
+
+    # move moov atom to the front so the browser can stream without downloading the full file
+    print("  faststart: movendo moov para o início...")
+    import subprocess
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(tmp_output),
+         "-movflags", "+faststart", "-c", "copy", str(OUTPUT_VIDEO)],
+        check=True, capture_output=True,
+    )
+    tmp_output.unlink(missing_ok=True)
 
     duration_min = final.duration / 60
     print(f"\n{'='*52}")

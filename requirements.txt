@@ -6,3 +6,7 @@ Pillow>=9.0.0
 gTTS>=2.3.0
 # TTS premium (opcional)
 openai>=1.0.0
+# interface web
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+jinja2>=3.1.0
