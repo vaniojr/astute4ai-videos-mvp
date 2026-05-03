@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Construir um pipeline de agentes de IA capaz de gerar, de forma autônoma, vídeos de resumo de notícias políticas brasileiras, com apresentador avatar, prontos para publicação no YouTube.
+Construir um pipeline de agentes de IA capaz de gerar, de forma autônoma, vídeos de resumo de notícias políticas brasileiras, prontos para publicação no YouTube.
 
 ## Problema
 
@@ -10,15 +10,21 @@ Produzir vídeos informativos diários é caro, lento e dependente de equipe hum
 
 ## Solução
 
-Uma squad de 7 agentes especializados, coordenados por um orchestrator, que:
+Uma squad de 8 agentes especializados, coordenados por um orchestrator, que:
 
 1. Coleta notícias de fontes RSS brasileiras confiáveis
 2. Seleciona e curada as mais relevantes
 3. Gera roteiro original, sem cópia literal, com viés editorial neutro
 4. Valida o roteiro contra critérios editoriais e factuais
 5. Empacota o conteúdo para YouTube (título, descrição, hashtags, capítulos)
-6. Monta payload para geração de vídeo com avatar IA (HeyGen)
-7. Prepara payload de publicação no YouTube
+6. Busca imagens relevantes por segmento do roteiro (Pexels — gratuito)
+7. Gera vídeo com narração TTS + slideshow de imagens (`generate_video_images.py` — custo $0)
+8. Prepara payload de publicação no YouTube
+
+> **Geração de vídeo com avatar (HeyGen)**
+> Implementado e funcional via `generate_video.py`. Custo: ~$5.95 por vídeo de 6 min.
+> Substituído pela abordagem de imagens + TTS por custo zero. Manter como opção premium
+> quando o canal demandar apresentador em câmera.
 
 ## Requisitos Funcionais
 
@@ -56,9 +62,18 @@ Uma squad de 7 agentes especializados, coordenados por um orchestrator, que:
 - Máximo de 15 hashtags
 - Texto para thumbnail ≤ 60 caracteres
 
-### RF-07: Payload de Vídeo
-- Compatível com HeyGen (configurável para outros provedores)
+### RF-07: Geração de Vídeo — Imagens + TTS (padrão)
+- Buscar imagens no Pexels por segmento do roteiro (orientação landscape)
+- Gerar narração via gTTS (gratuito) ou OpenAI TTS (~$0.07/vídeo)
+- Montar vídeo 1280x720 com MoviePy + ffmpeg
+- Script: `generate_video_images.py`
+- Custo: $0.00 com gTTS
+
+### RF-07b: Geração de Vídeo — Avatar HeyGen (opcional/premium)
 - Avatar e voice ID configuráveis em `presenter.json`
+- Script: `generate_video.py`
+- Custo: ~$5.95 por vídeo de 6 min via API
+- Usar quando qualidade de apresentador em câmera for necessária
 
 ### RF-08: Payload de Publicação
 - `made_for_kids = false`
@@ -75,11 +90,11 @@ Uma squad de 7 agentes especializados, coordenados por um orchestrator, que:
 
 - Pipeline executa do início ao roteiro sem erros manuais
 - Roteiro gerado é aprovado na primeira revisão humana
-- Payload de vídeo é aceito pela API do HeyGen sem erros de schema
+- Vídeo gerado localmente (imagens + TTS) com custo zero
+- Payload de publicação válido para a API do YouTube
 
 ## Fora do Escopo (MVP)
 
-- Geração efetiva do vídeo (chama API, mas não monitora renderização)
 - Upload automático ao YouTube
 - Agendamento automático de publicação
 - Multi-idioma
