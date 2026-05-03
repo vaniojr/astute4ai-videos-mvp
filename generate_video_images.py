@@ -11,6 +11,7 @@ Uso: python3 generate_video_images.py
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -29,6 +30,7 @@ except ImportError:
 # ── paths ──────────────────────────────────────────────────────────────────
 BASE_DIR      = Path(__file__).parent
 SCRIPT_FILE   = BASE_DIR / "outputs" / "script_validated.json"
+CURATED_FILE  = BASE_DIR / "outputs" / "curated_news.json"
 MANIFEST_FILE = BASE_DIR / "outputs" / "image_manifest.json"
 CONFIG_FILE   = BASE_DIR / "configs" / "video_generation.json"
 OUTPUT_VIDEO  = BASE_DIR / "outputs" / "video_images.mp4"
@@ -37,13 +39,105 @@ ENV_FILE      = BASE_DIR / ".env"
 
 PEXELS_URL = "https://api.pexels.com/v1/search"
 
-# ── queries por bloco de notícia (news_ref) ────────────────────────────────
-_NEWS_QUERIES = {
-    1: "brazil congress parliament vote politics",
-    2: "flood rain storm city street",
-    3: "hospital surgery medical doctor",
-    4: "economy finance money debt brazil",
-    5: "supreme court judge justice law",
+# ── tradução de termos PT-BR → EN para Pexels ─────────────────────────────
+_PT_EN: dict[str, str] = {
+    # política/governo
+    "presidente": "president",
+    "presidência": "presidency",
+    "governo": "government",
+    "ministro": "minister",
+    "ministério": "ministry",
+    "senado": "senate",
+    "senador": "senator",
+    "câmara": "congress",
+    "deputado": "congressman",
+    "congresso": "congress",
+    "eleição": "election",
+    "eleições": "election",
+    "partido": "political party",
+    "voto": "vote",
+    "votação": "voting",
+    "reforma": "reform",
+    "projeto de lei": "bill law",
+    "constituição": "constitution",
+    "golpe": "coup",
+    "manifestação": "protest demonstration",
+    "protesto": "protest",
+    "policia": "police",
+    "segurança": "security",
+    "crime": "crime",
+    "corrupção": "corruption",
+    # economia
+    "economia": "economy",
+    "inflação": "inflation",
+    "pib": "gdp economy",
+    "dólar": "dollar currency",
+    "real": "currency money",
+    "banco": "bank",
+    "juros": "interest rate",
+    "desemprego": "unemployment",
+    "emprego": "jobs employment",
+    "impostos": "taxes",
+    "orçamento": "budget",
+    "dívida": "debt",
+    "petróleo": "oil petroleum",
+    "petrobras": "oil company",
+    "agronegócio": "agribusiness",
+    "indústria": "industry factory",
+    # saúde/social
+    "saúde": "healthcare",
+    "hospital": "hospital",
+    "vacina": "vaccine",
+    "pandemia": "pandemic",
+    "sus": "healthcare hospital",
+    "educação": "education",
+    "escola": "school",
+    "universidade": "university",
+    "ciência": "science",
+    # ambiente/desastres
+    "clima": "climate",
+    "enchente": "flood",
+    "seca": "drought",
+    "incêndio": "fire",
+    "desastre": "disaster",
+    "amazônia": "amazon forest",
+    "ambiental": "environment",
+    # judiciário
+    "stf": "supreme court justice",
+    "supremo": "supreme court",
+    "juiz": "judge court",
+    "justiça": "justice court",
+    "investigação": "investigation",
+    "operação": "police operation",
+    # internacional
+    "estados unidos": "united states",
+    "eua": "usa flag",
+    "china": "china",
+    "guerra": "war",
+    "ucrânia": "ukraine war",
+    "diplomacia": "diplomacy",
+    "acordo": "agreement signing",
+    # misc
+    "brasil": "brazil",
+    "brasília": "brasilia brazil government",
+    "rio de janeiro": "rio de janeiro brazil",
+    "são paulo": "sao paulo brazil city",
+    "nordeste": "northeast brazil",
+}
+
+# Stopwords PT-BR para remover antes de extrair keywords
+_STOPWORDS = {
+    "de", "da", "do", "das", "dos", "em", "na", "no", "nas", "nos",
+    "para", "por", "com", "sem", "sob", "sobre", "até", "após",
+    "que", "se", "é", "e", "ou", "mas", "um", "uma", "uns", "umas",
+    "o", "a", "os", "as", "ao", "aos", "à", "às",
+    "este", "esta", "esse", "essa", "isso", "isto",
+    "seu", "sua", "seus", "suas", "meu", "minha",
+    "como", "mais", "muito", "também", "já", "ainda", "mesmo",
+    "só", "não", "foi", "ser", "ter", "tem", "vai", "entre",
+    "segundo", "após", "contra", "durante", "ante", "desde",
+    "afirmou", "disse", "declarou", "anunciou", "informou",
+    "novo", "nova", "novos", "novas", "grande", "grandes",
 }
 
 
@@ -56,7 +150,7 @@ def load_config() -> dict:
         "video_width": 1280,
         "video_height": 720,
         "fps": 24,
-        "images_per_segment": 2,
+        "images_per_segment": 3,
     }
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, encoding="utf-8") as f:
@@ -76,6 +170,134 @@ def load_env() -> dict:
 def check_ffmpeg() -> None:
     if not shutil.which("ffmpeg"):
         sys.exit("\nErro: ffmpeg não encontrado.\nInstale com: brew install ffmpeg\n")
+
+
+def load_curated_news() -> dict[str, dict]:
+    """Retorna mapa news_ref → {title, summary} a partir do curated_news.json."""
+    if not CURATED_FILE.exists():
+        return {}
+    try:
+        data  = json.loads(CURATED_FILE.read_text(encoding="utf-8"))
+        items = data.get("items", [])
+        # news_ref no roteiro é 1-based index
+        return {str(i + 1): item for i, item in enumerate(items)}
+    except Exception:
+        return {}
+
+
+# ── construção de query Pexels ────────────────────────────────────────────
+
+def _extract_keywords(text: str, max_words: int = 6) -> list[str]:
+    """Extrai palavras-chave relevantes de texto PT-BR."""
+    text = text.lower()
+    # remove pontuação e números isolados
+    text = re.sub(r"[^\w\s]", " ", text)
+    words = text.split()
+    # filtra stopwords e palavras muito curtas
+    keywords = [w for w in words if len(w) > 3 and w not in _STOPWORDS]
+    # conta frequência
+    freq: dict[str, int] = {}
+    for w in keywords:
+        freq[w] = freq.get(w, 0) + 1
+    # ordena por frequência
+    ranked = sorted(freq, key=lambda w: freq[w], reverse=True)
+    return ranked[:max_words]
+
+
+def _translate_to_en(pt_words: list[str]) -> list[str]:
+    """Traduz palavras PT-BR para EN usando dicionário, mantendo as não mapeadas.
+    Usa prefix matching para cobrir plurais e variações (enchente→enchentes, etc.)."""
+    en_terms: list[str] = []
+    seen: set[str] = set()
+
+    # ordena chaves por tamanho desc para priorizar matches mais longos
+    dict_keys = sorted(_PT_EN.keys(), key=len, reverse=True)
+
+    for w in pt_words:
+        matched = False
+        for key in dict_keys:
+            # match exato ou prefixo (cobre plural: enchente/enchentes, eleição/eleições)
+            if w == key or (len(key) >= 5 and w.startswith(key[:max(4, len(key)-2)])):
+                for t in _PT_EN[key].split():
+                    if t not in seen:
+                        en_terms.append(t)
+                        seen.add(t)
+                matched = True
+                break
+        # se não traduziu mas parece nome próprio (maiúsculo no texto original),
+        # ignora — Pexels não reconhece nomes próprios brasileiros bem
+        _ = matched  # usado implicitamente via loop
+
+    return en_terms
+
+
+def _multi_word_lookup(text: str) -> str | None:
+    """Verifica expressões multi-palavra no dicionário PT→EN."""
+    text_lower = text.lower()
+    for pt_expr, en_expr in _PT_EN.items():
+        if " " in pt_expr and pt_expr in text_lower:
+            return en_expr
+    return None
+
+
+def build_search_query(seg: dict, news_map: dict[str, dict]) -> str | None:
+    """
+    Constrói query Pexels relevante ao segmento:
+    1. Para news_block: usa título + resumo da notícia correspondente
+    2. Complementa com keywords extraídas do texto do segmento
+    3. Traduz termos PT→EN para melhor resultado no Pexels
+    """
+    seg_type = seg.get("type", "")
+
+    if seg_type == "intro":
+        return "news television studio anchor broadcast"
+    if seg_type == "outro":
+        return "microphone journalism broadcast television"
+    if seg_type == "transition":
+        return None
+
+    # Para news_block: busca dados da notícia curada
+    seg_text    = seg.get("text", "")
+    news_ref    = str(seg.get("news_ref", ""))
+    news_item   = news_map.get(news_ref, {})
+    news_title  = news_item.get("title", "")
+    news_summary = news_item.get("summary", "")
+
+    # fonte de texto: título da notícia (mais denso semanticamente) + texto do segmento
+    source_text = f"{news_title} {news_summary} {seg_text}"
+
+    # verifica expressões multi-palavra primeiro
+    multi = _multi_word_lookup(source_text)
+
+    # extrai keywords do texto
+    pt_words = _extract_keywords(source_text, max_words=8)
+    en_words = _translate_to_en(pt_words)
+
+    # inclui achado multi-palavra
+    if multi:
+        en_words = multi.split() + en_words
+
+    # fallback se nada foi traduzido: tenta palavras do título em inglês direto
+    if not en_words and news_title:
+        # títulos de notícias brasileiras frequentemente incluem nomes próprios e siglas
+        en_words = [w for w in news_title.split() if len(w) > 3][:4]
+
+    # limita e remove duplicatas mantendo ordem
+    seen: set[str] = set()
+    unique: list[str] = []
+    for w in en_words:
+        if w not in seen:
+            unique.append(w)
+            seen.add(w)
+
+    query_words = unique[:5]
+
+    # sempre ancora em "brazil" para fotos geograficamente relevantes
+    if "brazil" not in query_words and "war" not in query_words and "ukraine" not in query_words:
+        query_words.append("brazil")
+
+    query = " ".join(query_words) if query_words else "brazil politics news"
+    return query
 
 
 # ── pexels ─────────────────────────────────────────────────────────────────
@@ -98,6 +320,20 @@ def fetch_images(query: str, api_key: str, count: int) -> list[dict]:
     except Exception as e:
         print(f"  Pexels erro: {e}")
         return []
+
+
+def fetch_images_with_fallback(
+    primary_query: str, fallback_query: str, api_key: str, count: int
+) -> tuple[list[dict], str]:
+    """Tenta primary_query; se retornar < 2 fotos, usa fallback_query."""
+    photos = fetch_images(primary_query, api_key, count)
+    if len(photos) >= 2:
+        return photos, primary_query
+    print(f"  poucos resultados para \"{primary_query}\" — tentando fallback...")
+    fb = fetch_images(fallback_query, api_key, count)
+    if fb:
+        return fb, fallback_query
+    return photos, primary_query
 
 
 def download_file(url: str, dest: Path) -> bool:
@@ -183,19 +419,6 @@ def build_fallback_clip(audio_path: Path, cfg: dict):
 
 # ── main ───────────────────────────────────────────────────────────────────
 
-def get_query(seg: dict) -> str | None:
-    seg_type = seg["type"]
-    if seg_type == "intro":
-        return "news television studio anchor broadcast"
-    if seg_type == "outro":
-        return "microphone journalism broadcast television"
-    if seg_type == "transition":
-        return None
-    if seg_type == "news_block":
-        return _NEWS_QUERIES.get(seg.get("news_ref"), "brazil politics news")
-    return "brazil news politics"
-
-
 def main():
     check_ffmpeg()
 
@@ -219,7 +442,11 @@ def main():
     with open(SCRIPT_FILE, encoding="utf-8") as f:
         script = json.load(f)
 
-    segments = script.get("segments", [])
+    segments  = script.get("segments", [])
+    news_map  = load_curated_news()
+
+    if news_map:
+        print(f"Notícias carregadas: {len(news_map)} itens para enriquecer queries\n")
 
     # invalida cache se o roteiro mudou desde a última execução
     script_hash = hashlib.md5(json.dumps(segments, ensure_ascii=False).encode()).hexdigest()
@@ -238,7 +465,7 @@ def main():
 
     all_clips    = []
     manifest     = []
-    last_images  = []  # fallback para transitions
+    last_images: list[Path] = []  # fallback para transitions
 
     for idx, seg in enumerate(segments):
         text = seg.get("text", "").strip()
@@ -252,14 +479,18 @@ def main():
         audio_path = TEMP_DIR / f"seg_{idx:02d}.mp3"
         generate_audio(text, audio_path, provider, cfg, env)
 
-        # imagens
-        query = get_query(seg)
-        image_paths = []
-        image_meta  = []
+        # query de imagens
+        query      = build_search_query(seg, news_map)
+        image_paths: list[Path] = []
+        image_meta:  list[dict] = []
+        used_query   = query
 
         if query:
-            print(f"  busca: \"{query}\"")
-            photos = fetch_images(query, pexels_key, cfg["images_per_segment"])
+            fallback_q = "brazil politics news government"
+            photos, used_query = fetch_images_with_fallback(
+                query, fallback_q, pexels_key, cfg["images_per_segment"]
+            )
+            print(f"  busca: \"{used_query}\" → {len(photos)} foto(s)")
             for pi, photo in enumerate(photos):
                 dest = TEMP_DIR / f"seg_{idx:02d}_{pi}.jpg"
                 if not dest.exists():
@@ -269,6 +500,7 @@ def main():
                     image_meta.append(photo)
         else:
             image_paths = last_images  # transition: reutiliza imagens anteriores
+            print(f"  imagens: reutilizando {len(image_paths)} do segmento anterior")
 
         # clip
         if image_paths:
@@ -282,7 +514,7 @@ def main():
         manifest.append({
             "segment_index": idx,
             "type": seg_type,
-            "search_query": query,
+            "search_query": used_query,
             "images": image_meta,
             "audio_file": str(audio_path.name),
         })
