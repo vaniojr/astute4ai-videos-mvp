@@ -8,6 +8,7 @@ Pré-requisito: brew install ffmpeg
 Uso: python3 generate_video_images.py
 """
 
+import hashlib
 import json
 import os
 import shutil
@@ -219,7 +220,17 @@ def main():
         script = json.load(f)
 
     segments = script.get("segments", [])
+
+    # invalida cache se o roteiro mudou desde a última execução
+    script_hash = hashlib.md5(json.dumps(segments, ensure_ascii=False).encode()).hexdigest()
+    hash_file   = TEMP_DIR / ".script_hash"
+    if TEMP_DIR.exists():
+        cached_hash = hash_file.read_text().strip() if hash_file.exists() else ""
+        if cached_hash != script_hash:
+            print("Roteiro alterado — limpando cache de áudio anterior...\n")
+            shutil.rmtree(TEMP_DIR)
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    hash_file.write_text(script_hash)
 
     print(f"TTS provider : {provider}")
     print(f"Segmentos    : {len(segments)}")
