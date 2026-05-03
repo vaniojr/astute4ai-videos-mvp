@@ -63,7 +63,15 @@ def collect_news():
             )
             r.raise_for_status()
 
-            root    = ET.fromstring(r.content)
+            # detecta encoding via Content-Type; ISO-8859-1 não tem declaração XML
+            ct = r.headers.get("content-type", "")
+            enc_match = re.search(r"charset=([\w-]+)", ct)
+            enc = enc_match.group(1) if enc_match else "utf-8"
+            xml_text = r.content.decode(enc, errors="replace")
+            # garante declaração de encoding compatível com o parser
+            if not xml_text.lstrip().startswith("<?xml"):
+                xml_text = f'<?xml version="1.0" encoding="utf-8"?>\n' + xml_text
+            root    = ET.fromstring(xml_text.encode("utf-8"))
             channel = root.find(".//channel") or root
             found   = channel.findall("item") or root.findall(
                 ".//{http://www.w3.org/2005/Atom}entry"
