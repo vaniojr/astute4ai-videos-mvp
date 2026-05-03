@@ -12,8 +12,12 @@ import json
 import os
 import re
 import sys
+import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+# Suppress LibreSSL/urllib3 warning on macOS — cosmetic only, does not affect functionality
+warnings.filterwarnings("ignore", category=Warning, module="urllib3")
 
 import requests
 from dotenv import load_dotenv

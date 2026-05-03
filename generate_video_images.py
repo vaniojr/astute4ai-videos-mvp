@@ -14,7 +14,11 @@ import os
 import re
 import shutil
 import sys
+import warnings
 from pathlib import Path
+
+# Suppress LibreSSL/urllib3 warning on macOS
+warnings.filterwarnings("ignore", category=Warning, module="urllib3")
 
 import requests
 from dotenv import load_dotenv
