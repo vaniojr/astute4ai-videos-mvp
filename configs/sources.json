@@ -31,7 +31,7 @@
       "name": "UOL Notícias",
       "url": "https://noticias.uol.com.br",
       "type": "rss",
-      "feed_url": "https://noticias.uol.com.br/politica/index.xml",
+      "feed_url": "https://rss.uol.com.br/feed/noticias.xml",
       "country": "BR",
       "language": "pt-BR",
       "enabled": true
@@ -40,7 +40,7 @@
       "name": "Estadão",
       "url": "https://www.estadao.com.br",
       "type": "rss",
-      "feed_url": "https://www.estadao.com.br/arc/outboundfeeds/rss/categoria/politica/",
+      "feed_url": "https://www.estadao.com.br/arc/outboundfeeds/rss/?outputType=xml",
       "country": "BR",
       "language": "pt-BR",
       "enabled": true
