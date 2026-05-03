@@ -240,12 +240,45 @@ def _multi_word_lookup(text: str) -> str | None:
     return None
 
 
-def build_search_query(seg: dict, news_map: dict[str, dict]) -> str | None:
+def _ai_image_query(text: str, openai_key: str, cache: dict[str, str]) -> str | None:
+    """Usa OpenAI gpt-4o-mini para gerar uma query Pexels em inglês a partir do texto PT."""
+    if not openai_key:
+        return None
+    key = hashlib.md5(text[:200].encode()).hexdigest()
+    if key in cache:
+        return cache[key]
+    try:
+        from openai import OpenAI
+        resp = OpenAI(api_key=openai_key).chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": (
+                    "You are a photo editor. Given this Brazilian Portuguese news text, "
+                    "write 3-5 English keywords to search for a relevant stock photo on Pexels. "
+                    "Be specific and visual. Output ONLY the search query, nothing else.\n\n"
+                    f"Text: {text[:400]}"
+                ),
+            }],
+            temperature=0.3,
+            max_tokens=20,
+        )
+        query = resp.choices[0].message.content.strip().strip('"').strip("'")
+        cache[key] = query
+        return query
+    except Exception:
+        return None
+
+
+def build_search_query(
+    seg: dict, news_map: dict[str, dict],
+    openai_key: str = "", ai_cache: dict[str, str] | None = None,
+) -> str | None:
     """
-    Constrói query Pexels relevante ao segmento:
-    1. Para news_block: usa título + resumo da notícia correspondente
-    2. Complementa com keywords extraídas do texto do segmento
-    3. Traduz termos PT→EN para melhor resultado no Pexels
+    Prioridade da query Pexels:
+    1. image_query gerada pelo script writer (campo no JSON do roteiro)
+    2. OpenAI gpt-4o-mini, se OPENAI_API_KEY configurada
+    3. Keyword extraction PT→EN a partir do título/resumo da notícia + texto do segmento
     """
     seg_type = seg.get("type", "")
 
@@ -256,33 +289,35 @@ def build_search_query(seg: dict, news_map: dict[str, dict]) -> str | None:
     if seg_type == "transition":
         return None
 
-    # Para news_block: busca dados da notícia curada
-    seg_text    = seg.get("text", "")
-    news_ref    = str(seg.get("news_ref", ""))
-    news_item   = news_map.get(news_ref, {})
-    news_title  = news_item.get("title", "")
+    # 1. usa image_query do script writer quando disponível
+    script_query = seg.get("image_query", "").strip()
+    if script_query:
+        return script_query
+
+    seg_text     = seg.get("text", "")
+    news_ref     = str(seg.get("news_ref", ""))
+    news_item    = news_map.get(news_ref, {})
+    news_title   = news_item.get("title", "")
     news_summary = news_item.get("summary", "")
+    source_text  = f"{news_title} {news_summary} {seg_text}"
 
-    # fonte de texto: título da notícia (mais denso semanticamente) + texto do segmento
-    source_text = f"{news_title} {news_summary} {seg_text}"
+    # 2. OpenAI query generation (fast, specific, in English)
+    if openai_key and ai_cache is not None:
+        ai_q = _ai_image_query(source_text, openai_key, ai_cache)
+        if ai_q:
+            return ai_q
 
-    # verifica expressões multi-palavra primeiro
-    multi = _multi_word_lookup(source_text)
-
-    # extrai keywords do texto
+    # 3. keyword extraction + PT→EN translation (offline fallback)
+    multi    = _multi_word_lookup(source_text)
     pt_words = _extract_keywords(source_text, max_words=8)
     en_words = _translate_to_en(pt_words)
 
-    # inclui achado multi-palavra
     if multi:
         en_words = multi.split() + en_words
 
-    # fallback se nada foi traduzido: tenta palavras do título em inglês direto
     if not en_words and news_title:
-        # títulos de notícias brasileiras frequentemente incluem nomes próprios e siglas
         en_words = [w for w in news_title.split() if len(w) > 3][:4]
 
-    # limita e remove duplicatas mantendo ordem
     seen: set[str] = set()
     unique: list[str] = []
     for w in en_words:
@@ -292,12 +327,10 @@ def build_search_query(seg: dict, news_map: dict[str, dict]) -> str | None:
 
     query_words = unique[:5]
 
-    # sempre ancora em "brazil" para fotos geograficamente relevantes
     if "brazil" not in query_words and "war" not in query_words and "ukraine" not in query_words:
         query_words.append("brazil")
 
-    query = " ".join(query_words) if query_words else "brazil politics news"
-    return query
+    return " ".join(query_words) if query_words else "brazil politics news"
 
 
 # ── pexels ─────────────────────────────────────────────────────────────────
@@ -463,6 +496,9 @@ def main():
     print(f"Segmentos    : {len(segments)}")
     print(f"Resolução    : {cfg['video_width']}x{cfg['video_height']}\n")
 
+    openai_key = env.get("OPENAI_API_KEY", "")
+    ai_query_cache: dict[str, str] = {}
+
     all_clips    = []
     manifest     = []
     last_images: list[Path] = []  # fallback para transitions
@@ -480,7 +516,7 @@ def main():
         generate_audio(text, audio_path, provider, cfg, env)
 
         # query de imagens
-        query      = build_search_query(seg, news_map)
+        query      = build_search_query(seg, news_map, openai_key, ai_query_cache)
         image_paths: list[Path] = []
         image_meta:  list[dict] = []
         used_query   = query

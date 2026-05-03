@@ -276,9 +276,23 @@ def run_first_half():
         ["curated_news.json"],
         "script.json",
         f"Config: {json.dumps(config)}\nPresenter: {json.dumps(presenter)}\n"
-        "Retorne JSON com: segments (array de {type: intro|news_block|transition|outro, "
-        "text: string, news_ref?: string}), estimated_duration_min (número), "
-        "sources (array de strings).",
+        "REQUISITOS OBRIGATÓRIOS DE DURAÇÃO:\n"
+        "- Vídeo com MÍNIMO 6 minutos (nunca abaixo disso)\n"
+        "- Cada news_block: mínimo 180 palavras (aprofunde contexto, causas, impacto, desdobramentos)\n"
+        "- Total do roteiro: mínimo 800 palavras\n"
+        "- Velocidade de leitura: ~130 palavras/minuto\n\n"
+        "Retorne JSON com:\n"
+        "  segments: array de objetos com campos:\n"
+        "    - type: 'intro' | 'news_block' | 'transition' | 'outro'\n"
+        "    - text: string (mínimo 180 palavras para news_block)\n"
+        "    - news_ref: string 1-N (somente em news_block)\n"
+        "    - image_query: string com 3-5 palavras em INGLÊS descrevendo "
+        "a cena visual ideal para este segmento — seja específico e descritivo "
+        "(ex: 'brazil congress vote politicians chamber', 'flood rescue victims rio grande', "
+        "'supreme court judge brazil gavel', 'inflation market prices supermarket brazil')\n"
+        "  estimated_duration_min: número\n"
+        "  word_count: número total de palavras no roteiro\n"
+        "  sources: array de strings\n",
     )
     log()
 
