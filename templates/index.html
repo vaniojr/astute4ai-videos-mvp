@@ -33,6 +33,10 @@
   <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-[10px] font-black select-none">A</div>
   <span class="font-semibold text-sm tracking-tight">Astute4AI <span class="text-gray-600 font-normal">/ Videos</span></span>
   <div class="ml-auto flex items-center gap-3">
+    <span id="pipe-badge" class="hidden items-center gap-1.5 text-xs text-blue-400 pulse">
+      <span class="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"></span>
+      Executando pipeline...
+    </span>
     <span id="running-badge" class="hidden items-center gap-1.5 text-xs text-amber-400 pulse">
       <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
       Gerando vídeo...
@@ -61,6 +65,21 @@
     <nav id="steps-nav" class="overflow-y-auto px-2 pb-2 space-y-px"></nav>
 
     <div class="px-4 pt-3 pb-2 border-t border-gray-800 mt-1">
+      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Ações</p>
+    </div>
+    <nav class="px-2 pb-2 space-y-px">
+      <button id="nav-pipeline" onclick="showPipeline()"
+        class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        Executar Pipeline
+        <span id="pipe-nav-dot" class="hidden ml-auto w-1.5 h-1.5 rounded-full bg-blue-400 pulse"></span>
+      </button>
+    </nav>
+
+    <div class="px-4 pt-2 pb-2 border-t border-gray-800">
       <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Configurações</p>
     </div>
     <nav class="px-2 pb-4 space-y-px">
@@ -71,6 +90,15 @@
             d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
         </svg>
         Fontes de Notícias
+      </button>
+      <button id="nav-settings" onclick="showSettings()"
+        class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        Configurações
       </button>
     </nav>
 
@@ -125,9 +153,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────────────────────
-let state      = { steps: [], running: false, approval: null };
-let activeStep = null;   // number | 'sources'
+let state      = { steps: [], running: false, approval: null, pipe_running: false };
+let activeStep = null;   // number | 'sources' | 'pipeline' | 'settings'
 let sseSource  = null;
+let pipeSSE    = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bootstrap
@@ -147,6 +176,15 @@ async function loadStatus() {
     const badge = document.getElementById('running-badge');
     if (state.running) badge.classList.replace('hidden', 'flex');
     else               badge.classList.replace('flex', 'hidden');
+    const pipeBadge = document.getElementById('pipe-badge');
+    const pipeNavDot = document.getElementById('pipe-nav-dot');
+    if (state.pipe_running) {
+      pipeBadge.classList.replace('hidden', 'flex');
+      pipeNavDot?.classList.remove('hidden');
+    } else {
+      pipeBadge.classList.replace('flex', 'hidden');
+      pipeNavDot?.classList.add('hidden');
+    }
     if (typeof activeStep === 'number') refreshMain();
   } catch (_) {}
 }
@@ -168,14 +206,25 @@ function renderSidebar() {
   }).join('');
 
   const srcBtn = document.getElementById('nav-sources');
-  if (activeStep === 'sources') {
+  const pipeBtn = document.getElementById('nav-pipeline');
+  const settBtn = document.getElementById('nav-settings');
+
+  [srcBtn, pipeBtn, settBtn].forEach(btn => {
+    if (!btn) return;
+    btn.classList.remove('bg-blue-950', 'text-blue-300');
+    btn.classList.add('text-gray-400');
+  });
+
+  if (activeStep === 'sources' && srcBtn) {
     srcBtn.classList.add('bg-blue-950', 'text-blue-300');
     srcBtn.classList.remove('text-gray-400');
-  } else {
-    srcBtn.classList.remove('bg-blue-950', 'text-blue-300');
-    srcBtn.classList.add('text-gray-400');
+  } else if (activeStep === 'pipeline' && pipeBtn) {
+    pipeBtn.classList.add('bg-blue-950', 'text-blue-300');
+    pipeBtn.classList.remove('text-gray-400');
+  } else if (activeStep === 'settings' && settBtn) {
+    settBtn.classList.add('bg-blue-950', 'text-blue-300');
+    settBtn.classList.remove('text-gray-400');
   }
-}
 
 function stepIcon(s) {
   if (s.id === 9 && state.running) {
@@ -230,8 +279,10 @@ function showDashboard() {
     <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
       <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Ações rápidas</p>
       <div class="space-y-2">
+        ${quickAction('pipeline', 'Executar Pipeline', 'Coleta notícias e gera roteiro via OpenAI',
+            'M13 10V3L4 14h7v7l9-11h-7z', 'text-blue-400')}
         ${quickAction(8, 'Aprovar Roteiro', 'Revise e aprove o script gerado',
-            'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'text-blue-400')}
+            'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'text-green-400')}
         ${quickAction(9, 'Gerar Vídeo', 'Execute generate_video_images.py com logs ao vivo',
             'M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z',
             'text-purple-400')}
@@ -248,8 +299,11 @@ function statCard(label, value, cls) {
 }
 
 function quickAction(stepId, title, sub, iconPath, iconCls) {
+  const handler = typeof stepId === 'string'
+    ? (stepId === 'pipeline' ? 'showPipeline()' : `show${stepId.charAt(0).toUpperCase()+stepId.slice(1)}()`)
+    : `selectStep(${stepId})`;
   return `
-  <button onclick="selectStep(${stepId})"
+  <button onclick="${handler}"
     class="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-700
            hover:border-blue-700 hover:bg-blue-950/30 transition-all text-sm text-left group">
     <svg class="w-4 h-4 ${iconCls} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -628,6 +682,232 @@ async function confirmReset() {
 document.getElementById('reset-modal').addEventListener('click', function(e) {
   if (e.target === this) closeResetModal();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipeline execution
+// ─────────────────────────────────────────────────────────────────────────────
+function showPipeline() {
+  activeStep = 'pipeline';
+  renderSidebar();
+  renderPipeline();
+  if (state.pipe_running && !pipeSSE) connectPipeSSE();
+}
+
+function renderPipeline() {
+  const canStart   = !state.pipe_running && !state.running;
+  const step4Done  = state.steps.find(s => s.id === 4)?.done;
+  const step5Done  = state.steps.find(s => s.id === 5)?.done;
+  const approved   = state.approval?.decision === 'approved';
+  const canFinish  = step4Done && approved && !step5Done && canStart;
+
+  document.getElementById('main').innerHTML = `
+  <div class="p-6 max-w-3xl fade-in">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-lg font-semibold">Executar Pipeline</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Coleta notícias e gera roteiro via OpenAI automaticamente</p>
+      </div>
+      <div class="flex gap-2">
+        ${canFinish ? `
+        <button id="btn-pipe-finish" onclick="pipeFinish()"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+          Continuar (5–7)
+        </button>` : ''}
+        <button id="btn-pipe-run" onclick="pipeRun()"
+          ${canStart ? '' : 'disabled'}
+          class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                 ${canStart ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          ${state.pipe_running ? 'Executando...' : 'Executar (1–4)'}
+        </button>
+        ${state.pipe_running ? `
+        <button onclick="pipeCancel()"
+          class="px-4 py-2 rounded-lg text-sm text-red-400 border border-red-900 hover:bg-red-950 transition-colors">
+          Cancelar
+        </button>` : ''}
+      </div>
+    </div>
+
+    <!-- step progress -->
+    <div class="grid grid-cols-4 gap-2 mb-5">
+      ${[1,2,3,4].map(n => {
+        const s   = state.steps.find(st => st.id === n);
+        const cls = s?.done ? 'border-green-800 bg-green-900/20 text-green-400'
+                            : state.pipe_running ? 'border-blue-800/50 bg-blue-900/10 text-blue-500/70'
+                            : 'border-gray-800 bg-gray-900/50 text-gray-600';
+        const icon = s?.done
+          ? '<svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>'
+          : `<span class="text-[10px] font-bold">${n}</span>`;
+        return `<div class="border ${cls} rounded-lg p-2.5 text-center">
+          <div class="flex items-center justify-center mb-1">${icon}</div>
+          <p class="text-[10px] truncate">${s?.name || ''}</p>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- terminal -->
+    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
+      <div class="px-4 py-2 border-b border-gray-800 bg-gray-900 text-xs text-gray-600 mono flex items-center gap-2">
+        <span>Terminal</span>
+        ${state.pipe_running ? '<span class="w-1.5 h-1.5 rounded-full bg-blue-400 pulse inline-block"></span><span class="text-blue-400">em execução</span>' : ''}
+        <span id="pipe-term-status" class="ml-auto"></span>
+      </div>
+      <div id="pipe-terminal" class="mono text-[12px] leading-relaxed p-4 overflow-y-auto h-72 space-y-0.5">
+        <div class="text-gray-700">Aguardando execução...</div>
+      </div>
+    </div>
+
+    <p class="text-xs text-gray-700 mt-3">
+      Requer <code class="mono">OPENAI_API_KEY</code> configurada em
+      <button onclick="showSettings()" class="text-blue-500 hover:text-blue-400 underline">Configurações</button>.
+      Etapas 1-4 custam ~$0.01 com gpt-4o-mini.
+    </p>
+  </div>`;
+
+  if (state.pipe_running && !pipeSSE) connectPipeSSE();
+}
+
+async function pipeRun() {
+  const r = await fetch('/api/pipeline/run', { method: 'POST' });
+  if (!r.ok) { const d = await r.json(); alert(d.detail); return; }
+  await loadStatus();
+  renderPipeline();
+  connectPipeSSE();
+}
+
+async function pipeFinish() {
+  const r = await fetch('/api/pipeline/finish', { method: 'POST' });
+  if (!r.ok) { const d = await r.json(); alert(d.detail); return; }
+  await loadStatus();
+  renderPipeline();
+  connectPipeSSE();
+}
+
+async function pipeCancel() {
+  await fetch('/api/pipeline/cancel', { method: 'POST' });
+  if (pipeSSE) { pipeSSE.close(); pipeSSE = null; }
+  await loadStatus();
+  renderPipeline();
+}
+
+function connectPipeSSE() {
+  if (pipeSSE) pipeSSE.close();
+  pipeSSE = new EventSource('/api/pipeline/logs');
+  const term = document.getElementById('pipe-terminal');
+  if (term) term.innerHTML = '';
+
+  pipeSSE.onmessage = e => {
+    const t = document.getElementById('pipe-terminal');
+    if (!t) return;
+    if (t.children.length === 1 && t.children[0].textContent === 'Aguardando execução...') {
+      t.innerHTML = '';
+    }
+    const div = document.createElement('div');
+    div.className = 'terminal-line';
+    const txt = e.data;
+    if (/\[ERROR:/i.test(txt))        div.classList.add('err');
+    else if (/\[DONE:|✓|✅/i.test(txt)) div.classList.add('ok');
+    else if (/\[STEP:/i.test(txt))    div.style.color = '#93c5fd';
+    div.textContent = txt;
+    t.appendChild(div);
+    t.scrollTop = t.scrollHeight;
+  };
+
+  pipeSSE.addEventListener('done', async () => {
+    pipeSSE.close(); pipeSSE = null;
+    await loadStatus();
+    renderPipeline();
+    const s = document.getElementById('pipe-term-status');
+    if (s) s.textContent = 'concluído';
+  });
+
+  pipeSSE.onerror = () => {
+    if (pipeSSE?.readyState === EventSource.CLOSED) pipeSSE = null;
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings (API keys)
+// ─────────────────────────────────────────────────────────────────────────────
+async function showSettings() {
+  activeStep = 'settings';
+  renderSidebar();
+  document.getElementById('main').innerHTML = loadingView('Configurações');
+  const cfg = await fetch('/api/config').then(r => r.json());
+  renderSettingsView(cfg);
+}
+
+function renderSettingsView(cfg) {
+  document.getElementById('main').innerHTML = `
+  <div class="p-6 max-w-2xl fade-in">
+    <div class="mb-6">
+      <h2 class="text-lg font-semibold">Configurações</h2>
+      <p class="text-xs text-gray-500 mt-0.5">Gerencie as chaves de API utilizadas pelo pipeline</p>
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <p class="text-sm font-medium">OpenAI API Key</p>
+          <p class="text-xs text-gray-500 mt-0.5">Necessária para as etapas 2–5 do pipeline (gpt-4o-mini)</p>
+        </div>
+        <span class="px-2 py-0.5 text-[10px] rounded-full border ${cfg.openai_key_set
+          ? 'border-green-800 bg-green-900/30 text-green-400'
+          : 'border-gray-700 bg-gray-800 text-gray-500'}">
+          ${cfg.openai_key_set ? '✓ Configurada' : 'Não configurada'}
+        </span>
+      </div>
+      ${cfg.openai_key_set ? `
+      <p class="text-xs text-gray-600 mono mb-4">${cfg.openai_key_preview}</p>` : ''}
+      <div class="flex gap-2">
+        <input id="openai-key-input" type="password" autocomplete="off"
+          placeholder="${cfg.openai_key_set ? 'Nova chave (deixe vazio para manter)' : 'sk-...'}"
+          class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
+                 placeholder-gray-600 focus:outline-none focus:border-blue-600 mono"/>
+        <button onclick="saveOpenAIKey()"
+          class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+          Salvar
+        </button>
+      </div>
+      <p id="settings-msg" class="text-xs mt-2 hidden"></p>
+    </div>
+
+    <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-600">
+      <p class="font-medium text-gray-500 mb-2">Como obter uma chave OpenAI</p>
+      <ol class="space-y-1 list-decimal list-inside">
+        <li>Acesse <span class="mono text-gray-500">platform.openai.com/api-keys</span></li>
+        <li>Crie uma nova chave secreta</li>
+        <li>Adicione crédito mínimo (~$5) em <span class="mono text-gray-500">platform.openai.com/billing</span></li>
+        <li>Cole a chave acima e salve</li>
+      </ol>
+      <p class="mt-2 text-gray-700">Custo estimado por vídeo: ~$0.01–0.05 com gpt-4o-mini</p>
+    </div>
+  </div>`;
+}
+
+async function saveOpenAIKey() {
+  const val = document.getElementById('openai-key-input')?.value.trim();
+  const msg = document.getElementById('settings-msg');
+  if (!val) {
+    if (msg) { msg.textContent = 'Insira a chave antes de salvar.'; msg.className = 'text-xs mt-2 text-red-400'; }
+    return;
+  }
+  try {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ openai_api_key: val }),
+    });
+    if (msg) { msg.textContent = '✓ Chave salva com sucesso!'; msg.className = 'text-xs mt-2 text-green-400'; }
+    document.getElementById('openai-key-input').value = '';
+    setTimeout(() => showSettings(), 1200);
+  } catch (e) {
+    if (msg) { msg.textContent = 'Erro ao salvar: ' + e.message; msg.className = 'text-xs mt-2 text-red-400'; }
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sources management

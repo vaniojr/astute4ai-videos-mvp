@@ -30,6 +30,11 @@ _proc:    Optional[asyncio.subprocess.Process] = None
 _logs:    deque[str] = deque(maxlen=1000)
 _running: bool = False
 
+# ── pipeline runner state ──────────────────────────────────────────────────────
+_pipe_proc:    Optional[asyncio.subprocess.Process] = None
+_pipe_logs:    deque[str] = deque(maxlen=2000)
+_pipe_running: bool = False
+
 STEPS = [
     {"id": 1, "name": "News Collector",           "output": "collected_news.json"},
     {"id": 2, "name": "News Curator",              "output": "curated_news.json"},
@@ -72,7 +77,7 @@ async def api_status():
     if ap.exists():
         approval = json.loads(ap.read_text(encoding="utf-8"))
 
-    return {"steps": steps, "running": _running, "approval": approval}
+    return {"steps": steps, "running": _running, "approval": approval, "pipe_running": _pipe_running}
 
 
 # ── output files ───────────────────────────────────────────────────────────────
@@ -297,6 +302,146 @@ async def api_logs(request: Request):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── pipeline execution ─────────────────────────────────────────────────────────
+
+def _pipe_launch(args: list[str]):
+    """Return an async task that runs run_pipeline.py and streams to _pipe_logs."""
+    async def _run() -> None:
+        global _pipe_proc, _pipe_running
+        try:
+            _pipe_proc = await asyncio.create_subprocess_exec(
+                "python3", str(BASE_DIR / "run_pipeline.py"), *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(BASE_DIR),
+            )
+            assert _pipe_proc.stdout
+            async for raw in _pipe_proc.stdout:
+                _pipe_logs.append(raw.decode("utf-8", errors="replace").rstrip())
+            await _pipe_proc.wait()
+        finally:
+            _pipe_running = False
+            _pipe_proc = None
+    return _run()
+
+
+@app.post("/api/pipeline/run")
+async def api_pipeline_run():
+    global _pipe_running
+    if _pipe_running:
+        raise HTTPException(status_code=409, detail="Pipeline já em execução")
+    _pipe_logs.clear()
+    _pipe_running = True
+    asyncio.create_task(_pipe_launch([]))
+    return {"started": True}
+
+
+@app.post("/api/pipeline/finish")
+async def api_pipeline_finish():
+    global _pipe_running
+    if _pipe_running:
+        raise HTTPException(status_code=409, detail="Pipeline já em execução")
+    _pipe_logs.clear()
+    _pipe_running = True
+    asyncio.create_task(_pipe_launch(["--finish"]))
+    return {"started": True}
+
+
+@app.post("/api/pipeline/cancel")
+async def api_pipeline_cancel():
+    global _pipe_proc, _pipe_running
+    if _pipe_proc:
+        _pipe_proc.terminate()
+        _pipe_running = False
+        return {"cancelled": True}
+    return {"cancelled": False}
+
+
+@app.get("/api/pipeline/logs")
+async def api_pipeline_logs(request: Request):
+    async def _events():
+        snapshot = list(_pipe_logs)
+        for line in snapshot:
+            yield f"data: {line}\n\n"
+        sent = len(snapshot)
+        tick = 0
+        while True:
+            if await request.is_disconnected():
+                break
+            current = list(_pipe_logs)
+            for line in current[sent:]:
+                yield f"data: {line}\n\n"
+            sent = len(current)
+            tick += 1
+            if tick % 50 == 0:
+                yield ": keepalive\n\n"
+            if not _pipe_running and sent >= len(current):
+                yield "event: done\ndata: \n\n"
+                break
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(
+        _events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── app config (API keys) ──────────────────────────────────────────────────────
+
+def _read_env() -> dict[str, str]:
+    env_path = BASE_DIR / ".env"
+    if not env_path.exists():
+        return {}
+    result: dict[str, str] = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            result[k.strip()] = v.strip().strip('"').strip("'")
+    return result
+
+
+def _write_env_key(key: str, value: str) -> None:
+    env_path = BASE_DIR / ".env"
+    content  = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+    lines    = content.splitlines()
+    found    = False
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(f"{key}=") or stripped.startswith(f"# {key}="):
+            new_lines.append(f'{key}="{value}"' if value else f"# {key}=")
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        new_lines.append(f'{key}="{value}"')
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+
+@app.get("/api/config")
+async def api_config_get():
+    env = _read_env()
+    key = env.get("OPENAI_API_KEY", "")
+    return {
+        "openai_key_set": bool(key),
+        "openai_key_preview": f"sk-...{key[-4:]}" if len(key) > 6 else ("(não configurada)" if not key else "***"),
+    }
+
+
+class ConfigBody(BaseModel):
+    openai_api_key: str
+
+
+@app.post("/api/config")
+async def api_config_save(body: ConfigBody):
+    import os
+    _write_env_key("OPENAI_API_KEY", body.openai_api_key.strip())
+    os.environ["OPENAI_API_KEY"] = body.openai_api_key.strip()
+    return {"saved": True}
 
 
 # ── entry point ────────────────────────────────────────────────────────────────
