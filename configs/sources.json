@@ -44,6 +44,15 @@
       "country": "BR",
       "language": "pt-BR",
       "enabled": true
+    },
+    {
+      "name": "Poder360",
+      "url": "https://www.poder360.com.br/feed/",
+      "feed_url": "https://www.poder360.com.br/feed/",
+      "type": "rss",
+      "country": "BR",
+      "language": "pt-BR",
+      "enabled": true
     }
   ]
 }
