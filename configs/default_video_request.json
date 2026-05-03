@@ -1,0 +1,21 @@
+{
+  "content_type": "news",
+  "video_format": "political_explainer",
+  "language": "pt-BR",
+  "country": "BR",
+  "editorial_style": "neutro explicativo",
+  "editorial_bias": "neutro",
+  "target_duration_min": 5,
+  "target_duration_max": 8,
+  "min_news_items": 3,
+  "max_news_items": 5,
+  "collection_window_hours": 12,
+  "approval_required": true,
+  "destination_channel": {
+    "platform": "youtube",
+    "channel_name": "configurado posteriormente"
+  },
+  "has_presenter": true,
+  "presenter_name": "Rafael",
+  "presenter_intro_phrase": "Olá, eu sou Rafael, e este é o seu resumo político explicado de hoje."
+}

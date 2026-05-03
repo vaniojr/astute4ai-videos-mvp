@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "image_manifest.schema.json",
+  "title": "ImageManifest",
+  "type": "object",
+  "required": ["segments"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["segment_index", "type"],
+        "properties": {
+          "segment_index": { "type": "integer" },
+          "type": { "type": "string" },
+          "search_query": { "type": ["string", "null"] },
+          "audio_file": { "type": "string" },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string", "format": "uri" },
+                "photographer": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

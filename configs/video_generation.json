@@ -1,0 +1,8 @@
+{
+  "tts_provider": "gtts",
+  "tts_voice_openai": "onyx",
+  "video_width": 1280,
+  "video_height": 720,
+  "fps": 24,
+  "images_per_segment": 2
+}

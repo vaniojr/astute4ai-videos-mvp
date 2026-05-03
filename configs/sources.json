@@ -1,0 +1,49 @@
+{
+  "sources": [
+    {
+      "name": "Agência Brasil",
+      "url": "https://agenciabrasil.ebc.com.br",
+      "type": "rss",
+      "feed_url": "https://agenciabrasil.ebc.com.br/rss/politica/feed.xml",
+      "country": "BR",
+      "language": "pt-BR",
+      "enabled": true
+    },
+    {
+      "name": "G1 Política",
+      "url": "https://g1.globo.com/politica",
+      "type": "rss",
+      "feed_url": "https://g1.globo.com/rss/g1/politica/",
+      "country": "BR",
+      "language": "pt-BR",
+      "enabled": true
+    },
+    {
+      "name": "Folha de S.Paulo",
+      "url": "https://www.folha.uol.com.br",
+      "type": "rss",
+      "feed_url": "https://feeds.folha.uol.com.br/poder/rss091.xml",
+      "country": "BR",
+      "language": "pt-BR",
+      "enabled": true
+    },
+    {
+      "name": "UOL Notícias",
+      "url": "https://noticias.uol.com.br",
+      "type": "rss",
+      "feed_url": "https://noticias.uol.com.br/politica/index.xml",
+      "country": "BR",
+      "language": "pt-BR",
+      "enabled": true
+    },
+    {
+      "name": "Estadão",
+      "url": "https://www.estadao.com.br",
+      "type": "rss",
+      "feed_url": "https://www.estadao.com.br/arc/outboundfeeds/rss/categoria/politica/",
+      "country": "BR",
+      "language": "pt-BR",
+      "enabled": true
+    }
+  ]
+}

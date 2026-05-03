@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "content_package.schema.json",
+  "title": "ContentPackage",
+  "type": "object",
+  "required": ["title", "description", "hashtags", "chapters", "thumbnail_text"],
+  "properties": {
+    "title": { "type": "string", "maxLength": 100 },
+    "description": { "type": "string", "maxLength": 5000 },
+    "hashtags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 15
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "title"],
+        "properties": {
+          "timestamp": { "type": "string" },
+          "title": { "type": "string" }
+        }
+      }
+    },
+    "thumbnail_text": { "type": "string", "maxLength": 60 }
+  }
+}

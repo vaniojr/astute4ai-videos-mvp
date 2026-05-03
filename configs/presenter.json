@@ -1,0 +1,16 @@
+{
+  "presenter_name": "Rafael",
+  "presenter_intro_phrase": "Olá, eu sou Rafael, e este é o seu resumo político explicado de hoje.",
+  "avatar": {
+    "provider": "heygen",
+    "avatar_id": "2cbaecb3302b4132be112a40924e53a0",
+    "voice_id": "080d9383c0314056aef392892e009806",
+    "language": "pt-BR",
+    "style": "professional"
+  },
+  "visual_settings": {
+    "background": "studio_neutral",
+    "resolution": "1080p",
+    "aspect_ratio": "16:9"
+  }
+}

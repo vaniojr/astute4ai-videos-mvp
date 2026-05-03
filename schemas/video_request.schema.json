@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "video_request.schema.json",
+  "title": "VideoRequest",
+  "type": "object",
+  "required": ["content_type", "video_format", "language", "country", "editorial_style", "editorial_bias", "target_duration_min", "target_duration_max", "min_news_items", "max_news_items", "collection_window_hours", "approval_required", "destination_channel", "has_presenter"],
+  "properties": {
+    "content_type": { "type": "string", "enum": ["news"] },
+    "video_format": { "type": "string" },
+    "language": { "type": "string" },
+    "country": { "type": "string" },
+    "editorial_style": { "type": "string" },
+    "editorial_bias": { "type": "string" },
+    "target_duration_min": { "type": "integer", "minimum": 1 },
+    "target_duration_max": { "type": "integer", "minimum": 1 },
+    "min_news_items": { "type": "integer", "minimum": 1 },
+    "max_news_items": { "type": "integer", "minimum": 1 },
+    "collection_window_hours": { "type": "integer", "minimum": 1 },
+    "approval_required": { "type": "boolean" },
+    "destination_channel": {
+      "type": "object",
+      "required": ["platform", "channel_name"],
+      "properties": {
+        "platform": { "type": "string" },
+        "channel_name": { "type": "string" }
+      }
+    },
+    "has_presenter": { "type": "boolean" },
+    "presenter_name": { "type": "string" },
+    "presenter_intro_phrase": { "type": "string" }
+  }
+}

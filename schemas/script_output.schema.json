@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "script_output.schema.json",
+  "title": "ScriptOutput",
+  "type": "object",
+  "required": ["generated_at", "estimated_duration_min", "segments", "sources"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "estimated_duration_min": { "type": "number" },
+    "presenter_name": { "type": "string" },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "text"],
+        "properties": {
+          "type": { "type": "string", "enum": ["intro", "news_block", "transition", "outro"] },
+          "text": { "type": "string" },
+          "news_ref": { "type": "integer" }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "url": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["approved", "rejected", "pending"] },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

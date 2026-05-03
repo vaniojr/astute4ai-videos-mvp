@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "video_payload.schema.json",
+  "title": "VideoPayload",
+  "type": "object",
+  "required": ["provider", "avatar_id", "voice_id", "script_text", "presenter_settings"],
+  "properties": {
+    "provider": { "type": "string" },
+    "avatar_id": { "type": "string" },
+    "voice_id": { "type": "string" },
+    "script_text": { "type": "string" },
+    "presenter_settings": {
+      "type": "object",
+      "properties": {
+        "language": { "type": "string" },
+        "style": { "type": "string" },
+        "background": { "type": "string" },
+        "resolution": { "type": "string" },
+        "aspect_ratio": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "news_items.schema.json",
+  "title": "CollectedNews",
+  "type": "object",
+  "required": ["collected_at", "items", "errors"],
+  "properties": {
+    "collected_at": { "type": "string", "format": "date-time" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "source", "url", "published_at", "summary"],
+        "properties": {
+          "title": { "type": "string" },
+          "source": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "published_at": { "type": "string", "format": "date-time" },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": { "type": "string" },
+          "error": { "type": "string" }
+        }
+      }
+    }
+  }
+}
