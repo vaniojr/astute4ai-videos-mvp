@@ -13,78 +13,126 @@
     .jn  { color: #fde68a; }
     .jb  { color: #f9a8d4; }
     .jnl { color: #6b7280; }
-    @keyframes spin   { to { transform: rotate(360deg); } }
-    @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:.4} }
-    @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
-    .spin    { animation: spin 1s linear infinite; display:inline-block; }
-    .pulse   { animation: pulse 2s ease-in-out infinite; }
-    .fade-in { animation: fadeIn .2s ease; }
+    @keyframes spin    { to { transform: rotate(360deg); } }
+    @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.4} }
+    @keyframes fadeIn  { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
+    @keyframes slideIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:none} }
+    .spin     { animation: spin 1s linear infinite; display:inline-block; }
+    .pulse    { animation: pulse 2s ease-in-out infinite; }
+    .fade-in  { animation: fadeIn .2s ease; }
+    .slide-in { animation: slideIn .25s ease; }
     ::-webkit-scrollbar       { width:5px; height:5px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:#374151; border-radius:3px; }
-    .terminal-line.err { color:#f87171; }
-    .terminal-line.ok  { color:#4ade80; }
+    .term-step  { color:#93c5fd; font-weight:600; }
+    .term-done  { color:#4ade80; }
+    .term-error { color:#f87171; font-weight:600; }
+    .term-warn  { color:#fbbf24; }
+    .term-dim   { color:#4b5563; }
+    .nav-active { background:#1e3a5f !important; color:#93c5fd !important; }
   </style>
 </head>
 <body class="bg-[#080810] text-gray-200 h-screen flex flex-col overflow-hidden">
 
-<!-- ── Header ── -->
+<!-- Toasts -->
+<div id="toasts" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- Confirm modal -->
+<div id="confirm-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+  <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm fade-in">
+    <h3 id="confirm-title" class="font-semibold text-sm mb-2"></h3>
+    <p id="confirm-msg" class="text-xs text-gray-400 mb-5"></p>
+    <div class="flex gap-2">
+      <button onclick="confirmResolve(false)"
+        class="flex-1 px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-400 hover:bg-gray-800 transition-colors">
+        Cancelar
+      </button>
+      <button id="confirm-ok-btn" onclick="confirmResolve(true)"
+        class="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+        Confirmar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
 <header class="h-12 border-b border-gray-800 flex items-center px-5 gap-3 flex-shrink-0 bg-[#0b0b15]">
   <div class="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-[10px] font-black select-none">A</div>
   <span class="font-semibold text-sm tracking-tight">Astute4AI <span class="text-gray-600 font-normal">/ Videos</span></span>
   <div class="ml-auto flex items-center gap-3">
     <span id="pipe-badge" class="hidden items-center gap-1.5 text-xs text-blue-400 pulse">
       <span class="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"></span>
-      Executando pipeline...
+      Pipeline em execução
     </span>
     <span id="running-badge" class="hidden items-center gap-1.5 text-xs text-amber-400 pulse">
       <span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>
       Gerando vídeo...
     </span>
-    <button onclick="showResetModal()"
-      class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400
-             hover:border-blue-600 hover:text-blue-400 transition-all">
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 4v1m0 14v1M4.22 4.22l.707.707m12.727 12.727.707.707M1 12h1m20 0h1M4.22 19.78l.707-.707M18.657 5.343l.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
-      </svg>
-      Novo Vídeo
-    </button>
     <span class="text-[11px] text-gray-700" id="ts"></span>
   </div>
 </header>
 
-<!-- ── Body ── -->
+<!-- Body -->
 <div class="flex flex-1 overflow-hidden">
 
-  <!-- ── Sidebar ── -->
-  <aside class="w-60 border-r border-gray-800 flex flex-col bg-[#0b0b15] flex-shrink-0">
-    <div class="px-4 pt-4 pb-2">
-      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Pipeline</p>
-    </div>
-    <nav id="steps-nav" class="overflow-y-auto px-2 pb-2 space-y-px"></nav>
+  <!-- Sidebar -->
+  <aside class="w-56 border-r border-gray-800 flex flex-col bg-[#0b0b15] flex-shrink-0 overflow-y-auto">
 
-    <div class="px-4 pt-3 pb-2 border-t border-gray-800 mt-1">
-      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Ações</p>
-    </div>
-    <nav class="px-2 pb-2 space-y-px">
-      <button id="nav-pipeline" onclick="showPipeline()"
-        class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+    <!-- Início -->
+    <div class="px-2 pt-3 pb-1">
+      <button id="nav-home" onclick="showDashboard()"
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
         </svg>
-        Executar Pipeline
-        <span id="pipe-nav-dot" class="hidden ml-auto w-1.5 h-1.5 rounded-full bg-blue-400 pulse"></span>
+        Início
       </button>
-    </nav>
-
-    <div class="px-4 pt-2 pb-2 border-t border-gray-800">
-      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Configurações</p>
     </div>
-    <nav class="px-2 pb-4 space-y-px">
+
+    <!-- Criar Vídeo -->
+    <div class="px-4 pt-3 pb-1">
+      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Criar Vídeo</p>
+    </div>
+    <div class="px-2 space-y-px">
+      <button id="nav-pipeline" onclick="showPipeline()"
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        <span class="flex-1">Pipeline</span>
+        <span id="nav-pipeline-badge"></span>
+      </button>
+      <!-- Sub-itens etapas 1-7 -->
+      <div id="steps-nav" class="pl-6 space-y-px border-l border-gray-800/60 ml-4"></div>
+
+      <button id="nav-approval" onclick="selectStep(8)"
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="flex-1">Aprovar Roteiro</span>
+        <span id="nav-approval-badge"></span>
+      </button>
+
+      <button id="nav-video" onclick="selectStep(9)"
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+        </svg>
+        <span class="flex-1">Gerar Vídeo</span>
+        <span id="nav-video-badge"></span>
+      </button>
+    </div>
+
+    <!-- Sistema -->
+    <div class="px-4 pt-4 pb-1 border-t border-gray-800 mt-3">
+      <p class="text-[9px] font-bold uppercase tracking-widest text-gray-600">Sistema</p>
+    </div>
+    <div class="px-2 pb-2 space-y-px">
       <button id="nav-sources" onclick="showSources()"
-        class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
@@ -92,7 +140,7 @@
         Fontes de Notícias
       </button>
       <button id="nav-settings" onclick="showSettings()"
-        class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
+        class="nav-btn w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-all">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -100,24 +148,27 @@
         </svg>
         Configurações
       </button>
-    </nav>
+    </div>
 
+    <!-- Novo Vídeo -->
     <div class="mt-auto p-3 border-t border-gray-800">
-      <button onclick="showDashboard()"
-        class="w-full flex items-center gap-2 px-3 py-2 rounded text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors">
+      <button onclick="showResetModal()"
+        class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium
+               bg-blue-900/20 border border-blue-800/40 text-blue-400
+               hover:bg-blue-900/40 hover:border-blue-700 transition-all">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7m-9 2v8m4-8v8m5 0H3"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
-        Dashboard
+        Novo Vídeo
       </button>
     </div>
   </aside>
 
-  <!-- ── Main ── -->
+  <!-- Main -->
   <main id="main" class="flex-1 overflow-y-auto"></main>
 </div>
 
-<!-- ── Reset Modal ── -->
+<!-- Reset Modal -->
 <div id="reset-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
   <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm fade-in">
     <div class="flex items-start gap-3 mb-5">
@@ -129,7 +180,7 @@
       </div>
       <div>
         <h3 class="font-semibold text-sm">Criar Novo Vídeo</h3>
-        <p class="text-xs text-gray-500 mt-1">Todos os arquivos de saída gerados serão apagados e o pipeline reiniciado do zero.</p>
+        <p class="text-xs text-gray-500 mt-1">Todos os arquivos gerados serão apagados e o pipeline reiniciado do zero.</p>
       </div>
     </div>
     <label class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-700 cursor-pointer mb-5 text-sm">
@@ -154,9 +205,56 @@
 // State
 // ─────────────────────────────────────────────────────────────────────────────
 let state      = { steps: [], running: false, approval: null, pipe_running: false };
-let activeStep = null;   // number | 'sources' | 'pipeline' | 'settings'
+let activeView = null;   // 'home' | 'pipeline' | 8 | 9 | 1..7 | 'sources' | 'settings'
 let sseSource  = null;
 let pipeSSE    = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Toast + Confirm helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info', duration = 3500) {
+  const colors = {
+    info:    'bg-gray-800 border-gray-700 text-gray-200',
+    success: 'bg-green-900/80 border-green-800 text-green-300',
+    error:   'bg-red-900/80 border-red-800 text-red-300',
+    warn:    'bg-amber-900/80 border-amber-800 text-amber-300',
+  };
+  const icons = {
+    info:    'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    success: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+    error:   'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
+    warn:    'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
+  };
+  const el = document.createElement('div');
+  el.className = `pointer-events-auto flex items-start gap-2.5 px-4 py-3 rounded-xl border text-sm shadow-xl slide-in max-w-xs ${colors[type]}`;
+  el.innerHTML = `
+    <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icons[type]}"/>
+    </svg>
+    <span>${escHtml(msg)}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+let _confirmResolve = null;
+function showConfirm(title, msg, okLabel = 'Confirmar', danger = false) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent   = msg;
+    const okBtn = document.getElementById('confirm-ok-btn');
+    okBtn.textContent = okLabel;
+    okBtn.className = `flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${danger ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`;
+    document.getElementById('confirm-modal').classList.remove('hidden');
+  });
+}
+function confirmResolve(val) {
+  document.getElementById('confirm-modal').classList.add('hidden');
+  if (_confirmResolve) { _confirmResolve(val); _confirmResolve = null; }
+}
+document.getElementById('confirm-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('confirm-modal')) confirmResolve(false);
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bootstrap
@@ -173,19 +271,13 @@ async function loadStatus() {
     state = await r.json();
     renderSidebar();
     document.getElementById('ts').textContent = new Date().toLocaleTimeString('pt-BR');
-    const badge = document.getElementById('running-badge');
-    if (state.running) badge.classList.replace('hidden', 'flex');
-    else               badge.classList.replace('flex', 'hidden');
-    const pipeBadge = document.getElementById('pipe-badge');
-    const pipeNavDot = document.getElementById('pipe-nav-dot');
-    if (state.pipe_running) {
-      pipeBadge.classList.replace('hidden', 'flex');
-      pipeNavDot?.classList.remove('hidden');
-    } else {
-      pipeBadge.classList.replace('flex', 'hidden');
-      pipeNavDot?.classList.add('hidden');
-    }
-    if (typeof activeStep === 'number') refreshMain();
+    const rb = document.getElementById('running-badge');
+    const pb = document.getElementById('pipe-badge');
+    if (state.running) { rb.classList.remove('hidden'); rb.classList.add('flex'); }
+    else               { rb.classList.add('hidden');    rb.classList.remove('flex'); }
+    if (state.pipe_running) { pb.classList.remove('hidden'); pb.classList.add('flex'); }
+    else                    { pb.classList.add('hidden');    pb.classList.remove('flex'); }
+    if (activeView === 9) updateVideoGenUI();
   } catch (_) {}
 }
 
@@ -193,60 +285,77 @@ async function loadStatus() {
 // Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 function renderSidebar() {
-  const nav = document.getElementById('steps-nav');
-  nav.innerHTML = state.steps.map(s => {
-    const isActive = activeStep === s.id;
-    return `
-    <button class="w-full flex items-center gap-2.5 px-3 py-2 rounded text-left text-xs transition-all
-      ${isActive ? 'bg-blue-950 text-blue-300' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"
-      onclick="selectStep(${s.id})">
-      ${stepIcon(s)}
-      <span class="flex-1 truncate">${s.name}</span>
+  // Pipeline sub-items (steps 1-7)
+  const pipeSteps = state.steps.filter(s => s.id >= 1 && s.id <= 7);
+  document.getElementById('steps-nav').innerHTML = pipeSteps.map(s => {
+    const isActive = activeView === s.id;
+    let dot = 'bg-gray-700';
+    if (s.done) dot = 'bg-green-500';
+    else if (state.pipe_running) dot = 'bg-blue-400 pulse';
+    return `<button onclick="selectStep(${s.id})"
+      class="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-[11px] transition-all
+             ${isActive ? 'bg-blue-950/80 text-blue-300' : 'text-gray-600 hover:text-gray-300 hover:bg-gray-800/50'}">
+      <span class="w-2 h-2 rounded-full flex-shrink-0 ${dot}"></span>
+      <span class="truncate">${s.name}</span>
     </button>`;
   }).join('');
 
-  const srcBtn = document.getElementById('nav-sources');
-  const pipeBtn = document.getElementById('nav-pipeline');
-  const settBtn = document.getElementById('nav-settings');
+  // Approval badge
+  const step4Done    = state.steps.find(s => s.id === 4)?.done;
+  const approved     = state.approval?.decision === 'approved';
+  const rejected     = state.approval?.decision === 'rejected';
+  const videoDone    = state.steps.find(s => s.id === 9)?.done;
+  const abadge       = document.getElementById('nav-approval-badge');
+  if (approved) {
+    abadge.className = 'text-[9px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-400 border border-green-900';
+    abadge.textContent = '✓';
+  } else if (step4Done && !approved) {
+    abadge.className = 'w-2 h-2 rounded-full bg-amber-400 pulse flex-shrink-0';
+    abadge.textContent = '';
+  } else {
+    abadge.className = '';
+    abadge.textContent = '';
+  }
 
-  [srcBtn, pipeBtn, settBtn].forEach(btn => {
-    if (!btn) return;
-    btn.classList.remove('bg-blue-950', 'text-blue-300');
-    btn.classList.add('text-gray-400');
+  // Video badge
+  const vbadge = document.getElementById('nav-video-badge');
+  if (videoDone) {
+    vbadge.className = 'text-[9px] px-1.5 py-0.5 rounded-full bg-green-900/50 text-green-400 border border-green-900';
+    vbadge.textContent = '✓';
+  } else {
+    vbadge.className = ''; vbadge.textContent = '';
+  }
+
+  // Pipeline badge
+  const pipebadge = document.getElementById('nav-pipeline-badge');
+  if (state.pipe_running) {
+    pipebadge.className = 'w-2 h-2 rounded-full bg-blue-400 pulse flex-shrink-0';
+    pipebadge.textContent = '';
+  } else {
+    pipebadge.className = ''; pipebadge.textContent = '';
+  }
+
+  // Active states
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.remove('nav-active');
+    b.classList.add('text-gray-400');
+    b.classList.remove('text-blue-300');
   });
-
-  if (activeStep === 'sources' && srcBtn) {
-    srcBtn.classList.add('bg-blue-950', 'text-blue-300');
-    srcBtn.classList.remove('text-gray-400');
-  } else if (activeStep === 'pipeline' && pipeBtn) {
-    pipeBtn.classList.add('bg-blue-950', 'text-blue-300');
-    pipeBtn.classList.remove('text-gray-400');
-  } else if (activeStep === 'settings' && settBtn) {
-    settBtn.classList.add('bg-blue-950', 'text-blue-300');
-    settBtn.classList.remove('text-gray-400');
+  const map = { home:'nav-home', pipeline:'nav-pipeline', 8:'nav-approval', 9:'nav-video', sources:'nav-sources', settings:'nav-settings' };
+  const activeId = map[activeView];
+  if (activeId) {
+    const b = document.getElementById(activeId);
+    if (b) { b.classList.add('nav-active'); b.classList.remove('text-gray-400'); }
   }
-}
-
-function stepIcon(s) {
-  if (s.id === 9 && state.running) {
-    return `<span class="w-5 h-5 rounded-full border-2 border-amber-500 border-t-transparent spin flex-shrink-0"></span>`;
-  }
-  if (s.done) {
-    return `<span class="w-5 h-5 rounded-full bg-green-700 flex items-center justify-center flex-shrink-0">
-      <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></span>`;
-  }
-  return `<span class="w-5 h-5 rounded-full border border-gray-700 flex items-center justify-center text-[9px] text-gray-600 flex-shrink-0 font-bold">${s.id}</span>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Dashboard
+// Dashboard (Início)
 // ─────────────────────────────────────────────────────────────────────────────
 async function showDashboard() {
-  activeStep = null;
+  activeView = 'home';
   renderSidebar();
   _renderDashboardShell();
-  // fetch logs async without blocking the paint
   try {
     const r = await fetch('/api/pipeline/logs-snapshot');
     const d = await r.json();
@@ -254,63 +363,89 @@ async function showDashboard() {
   } catch (_) {}
 }
 
-function _renderDashboardShell() {
-  const done     = state.steps.filter(s => s.done).length;
-  const total    = state.steps.length;
-  const pct      = Math.round((done / total) * 100);
-  const approved = state.approval?.decision === 'approved';
-  const rejected = state.approval?.decision === 'rejected';
+function _nextStep() {
+  const pipeStepsDone = state.steps.filter(s => s.id >= 1 && s.id <= 7 && s.done).length;
+  const step4Done  = state.steps.find(s => s.id === 4)?.done;
+  const approved   = state.approval?.decision === 'approved';
+  const videoDone  = state.steps.find(s => s.id === 9)?.done;
 
-  // pipeline steps 1-7 only (8=approval, 9=video are special)
+  if (state.pipe_running)
+    return { label:'Pipeline em execução…', sub:'Acompanhe o progresso no terminal', color:'text-blue-400', bg:'bg-blue-900/15 border-blue-800/50', icon:'M13 10V3L4 14h7v7l9-11h-7z', action:'showPipeline()', btn:'Ver progresso' };
+  if (state.running)
+    return { label:'Gerando vídeo…', sub:'O vídeo está sendo processado', color:'text-amber-400', bg:'bg-amber-900/15 border-amber-800/50', icon:'M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z', action:'selectStep(9)', btn:'Ver progresso' };
+  if (videoDone)
+    return { label:'Vídeo pronto! 🎉', sub:'O vídeo foi gerado com sucesso', color:'text-green-400', bg:'bg-green-900/15 border-green-800/50', icon:'M5 13l4 4L19 7', action:'selectStep(9)', btn:'Ver vídeo' };
+  if (step4Done && approved)
+    return { label:'Pronto para gerar o vídeo', sub:'Roteiro aprovado · execute a etapa final', color:'text-purple-400', bg:'bg-purple-900/15 border-purple-800/50', icon:'M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z', action:'selectStep(9)', btn:'Gerar Vídeo' };
+  if (step4Done && !approved)
+    return { label:'Roteiro aguardando aprovação', sub:'Revise o script antes de continuar', color:'text-amber-400', bg:'bg-amber-900/15 border-amber-800/50', icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', action:'selectStep(8)', btn:'Revisar Roteiro' };
+  if (pipeStepsDone > 0)
+    return { label:`Pipeline em andamento (${pipeStepsDone}/7)`, sub:'Continue de onde parou ou reinicie', color:'text-blue-400', bg:'bg-blue-900/15 border-blue-800/50', icon:'M13 10V3L4 14h7v7l9-11h-7z', action:'showPipeline()', btn:'Continuar' };
+  return { label:'Pronto para começar', sub:'Execute o pipeline para coletar notícias e gerar o roteiro', color:'text-blue-400', bg:'bg-blue-900/15 border-blue-800/50', icon:'M13 10V3L4 14h7v7l9-11h-7z', action:'showPipeline()', btn:'Iniciar Pipeline' };
+}
+
+function _renderDashboardShell() {
   const pipeSteps = state.steps.filter(s => s.id >= 1 && s.id <= 7);
+  const approved  = state.approval?.decision === 'approved';
+  const rejected  = state.approval?.decision === 'rejected';
+  const videoDone = state.steps.find(s => s.id === 9)?.done;
+  const step4Done = state.steps.find(s => s.id === 4)?.done;
+  const n = _nextStep();
 
   document.getElementById('main').innerHTML = `
   <div class="max-w-3xl mx-auto p-6 fade-in">
-    <div class="flex items-center justify-between mb-5">
-      <div>
-        <h1 class="text-xl font-bold">Dashboard</h1>
-        <p class="text-gray-500 text-xs mt-0.5">Acompanhe e controle o pipeline</p>
+
+    <div class="mb-6">
+      <h1 class="text-xl font-bold">Início</h1>
+      <p class="text-gray-500 text-xs mt-0.5">Visão geral do pipeline de geração de vídeo</p>
+    </div>
+
+    <!-- Próximo passo -->
+    <div class="${n.bg} border rounded-xl p-5 mb-5 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-full bg-black/20 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 ${n.color}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${n.icon}"/>
+        </svg>
       </div>
-      <button onclick="showDashboard()" class="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 transition-colors">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        Atualizar
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-sm ${n.color}">${n.label}</p>
+        <p class="text-xs text-gray-500 mt-0.5">${n.sub}</p>
+      </div>
+      <button onclick="${n.action}"
+        class="px-4 py-2 rounded-lg bg-gray-900 border border-gray-700 text-sm font-medium text-gray-200
+               hover:border-blue-600 hover:text-blue-300 transition-all flex-shrink-0 whitespace-nowrap">
+        ${n.btn} →
       </button>
     </div>
 
-    <!-- Stats row -->
-    <div class="grid grid-cols-4 gap-3 mb-5">
-      ${statCard('Progresso', `${done}/${total}`, 'text-blue-400')}
-      ${statCard('Aprovação',
-          state.approval ? (approved ? 'Aprovado' : 'Rejeitado') : 'Pendente',
-          approved ? 'text-green-400' : rejected ? 'text-red-400' : 'text-gray-500')}
-      ${statCard('Vídeo',
-          state.steps.find(s=>s.id===9)?.done ? 'Pronto' : 'Pendente',
-          state.steps.find(s=>s.id===9)?.done ? 'text-green-400' : 'text-gray-500')}
-      ${statCard('Pipeline', state.pipe_running ? 'Rodando' : 'Parado',
-          state.pipe_running ? 'text-yellow-400' : 'text-gray-500')}
-    </div>
-
-    <!-- Progress bar -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3 mb-5">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs text-gray-500">Progresso geral</span>
-        <span class="text-xs font-bold text-blue-400">${pct}%</span>
-      </div>
-      <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
-        <div class="h-full bg-blue-600 rounded-full transition-all" style="width:${pct}%"></div>
+    <!-- Fluxo de trabalho -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-5">
+      <p class="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-4">Fluxo de trabalho</p>
+      <div class="flex items-center">
+        ${_wfStep('1', 'Pipeline', pipeSteps.filter(s=>s.done).length === 7, state.pipe_running)}
+        <div class="flex-1 h-px bg-gray-800 mx-2"></div>
+        ${_wfStep('2', 'Aprovação', approved, step4Done && !approved)}
+        <div class="flex-1 h-px bg-gray-800 mx-2"></div>
+        ${_wfStep('3', 'Vídeo', !!videoDone, state.running)}
       </div>
     </div>
 
-    <!-- Pipeline steps table -->
+    <!-- Stats -->
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      ${_statCard('Etapas concluídas', pipeSteps.filter(s=>s.done).length+'/7', 'text-blue-400')}
+      ${_statCard('Roteiro', state.approval ? (approved?'Aprovado':'Rejeitado') : 'Pendente',
+         approved?'text-green-400':rejected?'text-red-400':'text-gray-500')}
+      ${_statCard('Vídeo', videoDone?'Pronto':'Pendente', videoDone?'text-green-400':'text-gray-500')}
+    </div>
+
+    <!-- Etapas do Pipeline -->
     <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-5">
       <div class="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
         <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Etapas do Pipeline</p>
         <button onclick="runFromStep(1)" ${state.pipe_running ? 'disabled' : ''}
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                 ${state.pipe_running ? 'text-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} transition-colors">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          class="text-xs px-3 py-1.5 rounded-lg border transition-colors
+                 ${state.pipe_running ? 'border-gray-800 text-gray-700 cursor-not-allowed'
+                                      : 'border-gray-700 text-gray-400 hover:border-blue-700 hover:text-blue-400'}">
           Executar do zero
         </button>
       </div>
@@ -319,58 +454,70 @@ function _renderDashboardShell() {
       </div>
     </div>
 
-    <!-- Quick actions -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-5">
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ações</p>
-      <div class="flex flex-wrap gap-2">
-        ${quickBtn(8, 'Aprovar Roteiro', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'text-green-400')}
-        ${quickBtn(9, 'Gerar Vídeo', 'M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z', 'text-purple-400')}
-      </div>
-    </div>
-
-    <!-- Log panel (populated async) -->
+    <!-- Log -->
     <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <button onclick="toggleLog()" class="w-full flex items-center justify-between px-5 py-3 border-b border-gray-800">
+      <button onclick="toggleLog()"
+        class="w-full flex items-center justify-between px-5 py-3 border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
         <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Log do Pipeline</p>
         <svg id="log-chevron" class="w-4 h-4 text-gray-600 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
       <div id="log-panel" class="hidden">
-        <div id="dash-log" class="mono text-[11px] leading-5 p-4 max-h-80 overflow-y-auto bg-gray-950 text-gray-400">
-          <span class="text-gray-700">Carregando logs...</span>
+        <div id="dash-log" class="mono text-[11px] leading-5 p-4 max-h-72 overflow-y-auto bg-gray-950 text-gray-400">
+          <span class="text-gray-700">Carregando…</span>
         </div>
       </div>
     </div>
+
+  </div>`;
+}
+
+function _wfStep(num, label, done, active) {
+  const cls = done   ? 'bg-green-700 border-green-600 text-white'
+            : active ? 'bg-blue-900 border-blue-600 text-blue-300 pulse'
+            :          'bg-gray-900 border-gray-700 text-gray-600';
+  const icon = done
+    ? `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>`
+    : `<span class="text-[10px] font-bold">${num}</span>`;
+  return `<div class="flex flex-col items-center gap-1.5 flex-shrink-0">
+    <div class="w-9 h-9 rounded-full border-2 ${cls} flex items-center justify-center">${icon}</div>
+    <span class="text-[10px] text-gray-500">${label}</span>
+  </div>`;
+}
+
+function _statCard(label, value, cls) {
+  return `<div class="bg-gray-900/50 border border-gray-800 rounded-xl px-4 py-3">
+    <p class="text-[10px] text-gray-600 mb-1">${label}</p>
+    <p class="text-base font-bold ${cls}">${value}</p>
   </div>`;
 }
 
 function _stepRow(s) {
-  const isRunning = state.pipe_running;
-  const statusIcon = s.done
+  const running = state.pipe_running;
+  const icon = s.done
     ? `<span class="w-5 h-5 rounded-full bg-green-700 flex items-center justify-center flex-shrink-0">
          <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></span>`
+    : running
+    ? `<span class="w-5 h-5 rounded-full border-2 border-blue-500 border-t-transparent spin flex-shrink-0"></span>`
     : `<span class="w-5 h-5 rounded-full border border-gray-700 flex items-center justify-center flex-shrink-0 text-[10px] text-gray-600 font-bold">${s.id}</span>`;
 
-  return `
-  <div class="flex items-center gap-3 px-5 py-3 hover:bg-gray-800/40 transition-colors">
-    ${statusIcon}
-    <button onclick="selectStep(${s.id})" class="flex-1 text-left">
+  return `<div class="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-800/30 transition-colors">
+    ${icon}
+    <button onclick="selectStep(${s.id})" class="flex-1 text-left min-w-0">
       <span class="text-sm ${s.done ? 'text-gray-200' : 'text-gray-500'}">${s.name}</span>
       <span class="ml-2 text-[9px] text-gray-700 mono">${s.output}</span>
     </button>
-    <div class="flex items-center gap-1.5 flex-shrink-0">
-      ${s.done ? `
-      <span class="text-[10px] text-green-600 font-medium">✓ concluído</span>` : `
-      <span class="text-[10px] text-gray-700">pendente</span>`}
-      <button onclick="runFromStep(${s.id})" ${isRunning ? 'disabled' : ''}
-        title="Executar a partir da etapa ${s.id}"
-        class="flex items-center gap-1 px-2 py-1 rounded text-[10px] border ml-2
-               ${isRunning ? 'border-gray-800 text-gray-700 cursor-not-allowed'
-                           : 'border-gray-700 text-gray-400 hover:border-blue-700 hover:text-blue-400'} transition-colors">
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
-        Executar daqui
+    <div class="flex items-center gap-2 flex-shrink-0">
+      ${s.done ? `<span class="text-[10px] text-green-700">✓</span>` : `<span class="text-[10px] text-gray-800">—</span>`}
+      <button onclick="runFromStep(${s.id})" ${running ? 'disabled' : ''} title="Executar a partir daqui"
+        class="flex items-center gap-1 px-2 py-1 rounded text-[10px] border
+               ${running ? 'border-gray-800 text-gray-700 cursor-not-allowed'
+                         : 'border-gray-700 text-gray-500 hover:border-blue-700 hover:text-blue-400'} transition-colors">
+        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+        Re-run
       </button>
     </div>
   </div>`;
@@ -379,92 +526,46 @@ function _stepRow(s) {
 function _renderDashboardLog(logs, running) {
   const panel = document.getElementById('dash-log');
   if (!panel) return;
-  if (!logs || !logs.length) {
-    panel.innerHTML = '<span class="text-gray-700">Nenhum log disponível. Execute o pipeline.</span>';
-    return;
-  }
+  if (!logs?.length) { panel.innerHTML = '<span class="text-gray-700">Nenhum log disponível. Execute o pipeline.</span>'; return; }
   panel.innerHTML = logs.map(line => {
     let cls = 'text-gray-400';
-    if (line.startsWith('[STEP:'))    cls = 'text-blue-400 font-bold';
-    else if (line.startsWith('[DONE:'))  cls = 'text-green-400';
-    else if (line.startsWith('[ERROR:')) cls = 'text-red-400 font-bold';
-    else if (line.includes('✅'))         cls = 'text-green-300 font-bold';
-    else if (line.includes('✗') || line.includes('ERRO') || line.toLowerCase().includes('error')) cls = 'text-red-400';
-    else if (line.includes('⏸') || line.includes('[APPROVAL'))  cls = 'text-yellow-400';
-    else if (line.startsWith('==='))      cls = 'text-gray-600';
+    if (line.startsWith('[STEP:'))                                          cls = 'term-step';
+    else if (line.startsWith('[DONE:'))                                     cls = 'term-done';
+    else if (line.startsWith('[ERROR:'))                                    cls = 'term-error';
+    else if (line.includes('✅'))                                           cls = 'term-done font-semibold';
+    else if (line.includes('✗') || /erro|error/i.test(line))               cls = 'term-error';
+    else if (line.includes('⏸') || line.includes('[APPROVAL'))             cls = 'term-warn';
+    else if (line.startsWith('==='))                                        cls = 'term-dim';
     return `<div class="${cls}">${escHtml(line)}</div>`;
   }).join('');
-  if (running) {
-    panel.innerHTML += '<div class="text-yellow-400 mt-1">▸ executando...</div>';
-  }
+  if (running) panel.innerHTML += '<div class="term-warn mt-1">▸ executando…</div>';
   panel.scrollTop = panel.scrollHeight;
 }
 
 function toggleLog() {
-  const panel = document.getElementById('log-panel');
-  const chevron = document.getElementById('log-chevron');
-  if (!panel) return;
-  panel.classList.toggle('hidden');
-  chevron?.classList.toggle('rotate-180');
+  document.getElementById('log-panel')?.classList.toggle('hidden');
+  document.getElementById('log-chevron')?.classList.toggle('rotate-180');
 }
 
 async function runFromStep(n) {
   if (state.pipe_running) return;
   const label = n === 1 ? 'Executar pipeline do zero' : `Executar a partir da etapa ${n}`;
-  if (!confirm(`${label}?\nOs logs anteriores serão substituídos.`)) return;
+  const ok = await showConfirm(label, 'Os logs anteriores serão substituídos. Continuar?');
+  if (!ok) return;
   try {
     const r = await fetch(`/api/pipeline/run-from/${n}`, { method: 'POST' });
-    if (!r.ok) { const e = await r.json(); alert(e.detail || 'Erro'); return; }
+    if (!r.ok) { const e = await r.json(); toast(e.detail || 'Erro ao iniciar pipeline', 'error'); return; }
+    toast('Pipeline iniciado!', 'success');
     await loadStatus();
-    showPipeline();   // switch to pipeline view with live terminal
-  } catch (e) { alert('Erro: ' + e.message); }
-}
-
-function statCard(label, value, cls) {
-  return `<div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-    <p class="text-[11px] text-gray-600 mb-1">${label}</p>
-    <p class="text-lg font-bold ${cls}">${value}</p>
-  </div>`;
-}
-
-function quickBtn(stepId, title, iconPath, iconCls) {
-  return `
-  <button onclick="selectStep(${stepId})"
-    class="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700
-           hover:border-blue-700 hover:bg-blue-950/30 transition-all text-xs text-left">
-    <svg class="w-3.5 h-3.5 ${iconCls} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}"/>
-    </svg>
-    <span class="font-medium">${title}</span>
-  </button>`;
-}
-
-function quickAction(stepId, title, sub, iconPath, iconCls) {
-  const handler = typeof stepId === 'string'
-    ? (stepId === 'pipeline' ? 'showPipeline()' : `show${stepId.charAt(0).toUpperCase()+stepId.slice(1)}()`)
-    : `selectStep(${stepId})`;
-  return `
-  <button onclick="${handler}"
-    class="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-700
-           hover:border-blue-700 hover:bg-blue-950/30 transition-all text-sm text-left group">
-    <svg class="w-4 h-4 ${iconCls} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}"/>
-    </svg>
-    <div>
-      <p class="font-medium">${title}</p>
-      <p class="text-xs text-gray-500 mt-0.5">${sub}</p>
-    </div>
-    <svg class="w-4 h-4 ml-auto text-gray-700 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-  </button>`;
+    showPipeline();
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step selection
 // ─────────────────────────────────────────────────────────────────────────────
 async function selectStep(id) {
-  activeStep = id;
+  activeView = id;
   renderSidebar();
   const step = state.steps.find(s => s.id === id);
   if (!step) return;
@@ -478,10 +579,6 @@ async function selectStep(id) {
   } catch (e) { renderError('Erro ao carregar: ' + e.message); }
 }
 
-function refreshMain() {
-  if (activeStep === 9) updateVideoGenUI();
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON viewer
 // ─────────────────────────────────────────────────────────────────────────────
@@ -489,16 +586,16 @@ function renderJsonStep(step, data) {
   window._jsonData = data;
   document.getElementById('main').innerHTML = `
   <div class="p-6 fade-in">
-    <div class="flex items-center gap-3 mb-6">
-      <span class="w-7 h-7 rounded-full bg-green-700 flex items-center justify-center">
+    <div class="flex items-center gap-3 mb-5">
+      <span class="w-7 h-7 rounded-full bg-green-700 flex items-center justify-center flex-shrink-0">
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-      </span>
-      <div>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></span>
+      <div class="flex-1">
         <h2 class="text-lg font-semibold">${step.name}</h2>
         <p class="text-xs text-gray-500 mono">${step.output}</p>
       </div>
-      <button onclick="copyJson()" class="ml-auto text-xs text-gray-600 hover:text-gray-300 transition-colors px-3 py-1.5 border border-gray-800 rounded-lg">
+      <button onclick="copyJson()"
+        class="text-xs text-gray-600 hover:text-gray-300 transition-colors px-3 py-1.5 border border-gray-800 rounded-lg">
         Copiar JSON
       </button>
     </div>
@@ -511,21 +608,26 @@ function renderJsonStep(step, data) {
 
 function copyJson() {
   navigator.clipboard.writeText(JSON.stringify(window._jsonData, null, 2));
+  toast('JSON copiado!', 'success', 2000);
 }
 
 function renderNotReady(step) {
   document.getElementById('main').innerHTML = `
   <div class="p-6 fade-in">
-    <div class="flex items-center gap-3 mb-6">
-      <span class="w-7 h-7 rounded-full border border-gray-700 flex items-center justify-center text-xs text-gray-600 font-bold">${step.id}</span>
+    <div class="flex items-center gap-3 mb-5">
+      <span class="w-7 h-7 rounded-full border border-gray-700 flex items-center justify-center text-xs text-gray-600 font-bold flex-shrink-0">${step.id}</span>
       <div>
         <h2 class="text-lg font-semibold">${step.name}</h2>
         <p class="text-xs text-gray-500 mono">${step.output}</p>
       </div>
     </div>
     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-      <p class="text-gray-500 text-sm">Etapa ainda não executada.</p>
-      <p class="text-gray-700 text-xs mt-1">Execute o pipeline para gerar <code class="mono">${step.output}</code></p>
+      <p class="text-gray-500 text-sm mb-1">Esta etapa ainda não foi executada.</p>
+      <p class="text-gray-700 text-xs mb-4">Execute o pipeline para gerar <code class="mono">${step.output}</code></p>
+      <button onclick="runFromStep(${step.id})"
+        class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+        Executar a partir daqui
+      </button>
     </div>
   </div>`;
 }
@@ -538,21 +640,31 @@ async function renderApproval() {
   if (!step?.done) {
     document.getElementById('main').innerHTML = `
     <div class="p-6 fade-in">
-      <h2 class="text-lg font-semibold mb-4">Aprovação do Roteiro</h2>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-        <p class="text-gray-500 text-sm">Roteiro ainda não gerado. Execute as etapas 1–4 primeiro.</p>
+      <h2 class="text-lg font-semibold mb-1">Aprovação do Roteiro</h2>
+      <p class="text-xs text-gray-500 mb-5">Revise e aprove o roteiro antes de gerar o vídeo</p>
+      <div class="bg-amber-950/20 border border-amber-900/40 rounded-xl p-8 text-center">
+        <svg class="w-8 h-8 text-amber-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+        <p class="text-gray-400 text-sm mb-1">Roteiro ainda não gerado.</p>
+        <p class="text-gray-600 text-xs mb-4">Execute as etapas 1–4 do pipeline primeiro.</p>
+        <button onclick="showPipeline()"
+          class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+          Ir para Pipeline →
+        </button>
       </div>
     </div>`;
     return;
   }
   document.getElementById('main').innerHTML = loadingView('Aprovação do Roteiro');
   const data = await fetch('/api/output/script_validated.json').then(r => r.json());
-  const segs  = data.segments || [];
-  const apr   = state.approval;
+  const segs = data.segments || [];
+  const apr  = state.approval;
 
   document.getElementById('main').innerHTML = `
   <div class="p-6 max-w-3xl fade-in">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-5">
       <div>
         <h2 class="text-lg font-semibold">Aprovação do Roteiro</h2>
         <p class="text-xs text-gray-500 mt-0.5">Revise o script antes de gerar o vídeo</p>
@@ -560,9 +672,9 @@ async function renderApproval() {
       <div id="approval-badge">${approvalBadge(apr)}</div>
     </div>
 
-    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden mb-6">
-      <div class="px-4 py-2.5 border-b border-gray-800 bg-gray-900 text-xs text-gray-500">
-        script_validated.json · ${segs.length} segmentos · ~${data.estimated_duration_min?.toFixed(1)} min
+    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden mb-5">
+      <div class="px-4 py-2.5 border-b border-gray-800 bg-gray-900 text-xs text-gray-500 mono">
+        script_validated.json · ${segs.length} segmentos${data.estimated_duration_min ? ` · ~${data.estimated_duration_min.toFixed(1)} min` : ''}
       </div>
       <div class="divide-y divide-gray-800/50 max-h-96 overflow-y-auto">
         ${segs.map(s => `
@@ -570,29 +682,31 @@ async function renderApproval() {
           <span class="inline-block text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded
             ${segTypeColor(s.type)} mb-2">${s.type}${s.news_ref ? ' #'+s.news_ref : ''}</span>
           <p class="text-sm text-gray-300 leading-relaxed">${escHtml(s.text)}</p>
+          ${s.image_query ? `<p class="text-[10px] text-gray-600 mono mt-1">🔍 ${escHtml(s.image_query)}</p>` : ''}
         </div>`).join('')}
       </div>
     </div>
 
     <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Decisão</p>
-      <div class="flex gap-3 mb-4">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Decisão</p>
+      <textarea id="approval-notes" rows="2" placeholder="Observações (opcional)…"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300
+               placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none mb-4"></textarea>
+      <div class="flex gap-3">
         <button onclick="decide('approved')"
           class="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-          Aprovar
+          Aprovar Roteiro
         </button>
         <button onclick="decide('rejected')"
-          class="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-red-900 hover:bg-red-800 text-white text-sm font-medium transition-colors">
+          class="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-800 text-gray-400 hover:text-red-300 text-sm font-medium transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           Rejeitar
         </button>
       </div>
-      <textarea id="approval-notes" rows="2" placeholder="Observações (opcional)..."
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300
-               placeholder-gray-600 focus:outline-none focus:border-blue-600 resize-none"></textarea>
+      ${apr?.decision ? `<p class="text-xs text-gray-600 mt-3">Decisão: <span class="${apr.decision==='approved'?'text-green-400':'text-red-400'}">${apr.decision}</span>${apr.notes ? ` · "${escHtml(apr.notes)}"` : ''}</p>` : ''}
     </div>
   </div>`;
 }
@@ -600,8 +714,8 @@ async function renderApproval() {
 function approvalBadge(apr) {
   if (!apr) return `<span class="px-3 py-1 text-xs rounded-full bg-gray-800 text-gray-500">Pendente</span>`;
   if (apr.decision === 'approved')
-    return `<span class="px-3 py-1 text-xs rounded-full bg-green-900/50 text-green-400 border border-green-800">Aprovado</span>`;
-  return `<span class="px-3 py-1 text-xs rounded-full bg-red-900/50 text-red-400 border border-red-900">Rejeitado</span>`;
+    return `<span class="px-3 py-1 text-xs rounded-full bg-green-900/50 text-green-400 border border-green-800">✓ Aprovado</span>`;
+  return `<span class="px-3 py-1 text-xs rounded-full bg-red-900/50 text-red-400 border border-red-900">✗ Rejeitado</span>`;
 }
 
 async function decide(decision) {
@@ -612,13 +726,14 @@ async function decide(decision) {
     body: JSON.stringify({ decision, notes }),
   });
   await loadStatus();
+  toast(decision === 'approved' ? 'Roteiro aprovado!' : 'Roteiro rejeitado.', decision === 'approved' ? 'success' : 'warn');
   renderApproval();
 }
 
-function segTypeColor(type) {
-  const map = { intro:'bg-blue-900/50 text-blue-400', outro:'bg-purple-900/50 text-purple-400',
-                news_block:'bg-amber-900/50 text-amber-400', transition:'bg-gray-800 text-gray-500' };
-  return map[type] || 'bg-gray-800 text-gray-500';
+function segTypeColor(t) {
+  return { intro:'bg-blue-900/50 text-blue-400', outro:'bg-purple-900/50 text-purple-400',
+           news_block:'bg-amber-900/50 text-amber-400', transition:'bg-gray-800 text-gray-500' }[t]
+         || 'bg-gray-800 text-gray-500';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -627,28 +742,27 @@ function segTypeColor(type) {
 function renderVideoGen() {
   const videoDone = state.steps.find(s => s.id === 9)?.done;
   const approved  = state.approval?.decision === 'approved';
-  // Cache-bust so the browser fetches the new video after regeneration
-  const videoSrc  = `/outputs/video_images.mp4?t=${Date.now()}`;
+  const videoSrc  = `/api/video?t=${Date.now()}`;
 
   document.getElementById('main').innerHTML = `
-  <div class="p-6 fade-in">
-    <div class="flex items-center gap-3 mb-6">
+  <div class="p-6 max-w-3xl fade-in">
+    <div class="flex items-center justify-between mb-5">
       <div>
-        <h2 class="text-lg font-semibold">Geração do Vídeo</h2>
-        <p class="text-xs text-gray-500 mt-0.5">Pexels + gTTS + MoviePy · sem custo</p>
+        <h2 class="text-lg font-semibold">Gerar Vídeo</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Imagens Pexels + narração gTTS + composição MoviePy</p>
       </div>
-      <div class="ml-auto flex gap-2">
+      <div class="flex gap-2">
         <button id="btn-run" onclick="startVideo()"
-          ${state.running ? 'disabled' : ''}
+          ${state.running || !approved ? 'disabled' : ''}
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
-                 ${state.running ? 'bg-gray-800 text-gray-600 cursor-not-allowed' :
-                   'bg-blue-600 hover:bg-blue-500 text-white'}">
+                 ${state.running || !approved ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                                             : 'bg-blue-600 hover:bg-blue-500 text-white'}">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          ${state.running ? 'Gerando...' : 'Gerar Vídeo'}
+          ${state.running ? 'Gerando…' : 'Gerar Vídeo'}
         </button>
         <button id="btn-cancel" onclick="cancelVideo()"
           class="${state.running ? '' : 'hidden'} px-4 py-2 rounded-lg text-sm text-red-400 border border-red-900 hover:bg-red-950 transition-colors">
@@ -658,26 +772,22 @@ function renderVideoGen() {
     </div>
 
     ${!approved ? `
-    <div class="bg-amber-950/30 border border-amber-900/50 rounded-xl px-4 py-3 mb-5 flex items-center gap-2 text-sm text-amber-400">
+    <div class="bg-amber-950/20 border border-amber-900/40 rounded-xl px-4 py-3 mb-5 flex items-center gap-3 text-sm text-amber-400">
       <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
       </svg>
-      Roteiro não aprovado. Aprove na etapa 8 antes de gerar o vídeo.
+      Roteiro não aprovado. <button onclick="selectStep(8)" class="underline text-amber-300 hover:text-amber-200 ml-1">Aprovar roteiro →</button>
     </div>` : ''}
 
     <!-- Terminal -->
-    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden mb-6">
+    <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden mb-5">
       <div class="flex items-center gap-2 px-4 py-2.5 border-b border-gray-800 bg-gray-900">
-        <div class="flex gap-1.5">
-          <span class="w-3 h-3 rounded-full bg-red-700"></span>
-          <span class="w-3 h-3 rounded-full bg-yellow-700"></span>
-          <span class="w-3 h-3 rounded-full bg-green-700"></span>
-        </div>
+        <span class="flex gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-red-700/60"></span><span class="w-2.5 h-2.5 rounded-full bg-yellow-700/60"></span><span class="w-2.5 h-2.5 rounded-full bg-green-700/60"></span></span>
         <span class="text-xs text-gray-600 ml-1 mono">generate_video_images.py</span>
-        <span id="term-status" class="ml-auto text-[10px] text-gray-700">aguardando</span>
+        <span id="term-status" class="ml-auto text-[10px] text-gray-700">${state.running ? 'executando…' : 'aguardando'}</span>
       </div>
-      <div id="terminal" class="mono text-xs leading-5 p-4 h-64 overflow-y-auto bg-gray-950 text-gray-400">
+      <div id="terminal" class="mono text-xs leading-5 p-4 h-56 overflow-y-auto bg-gray-950 text-gray-400">
         <span class="text-gray-700">$ python3 generate_video_images.py</span>
       </div>
     </div>
@@ -686,15 +796,15 @@ function renderVideoGen() {
     <div id="video-section" class="${videoDone ? '' : 'hidden'}">
       <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div class="px-4 py-2.5 border-b border-gray-800 flex items-center gap-3">
-          <span class="text-xs text-gray-500 flex-1">outputs/video_images.mp4</span>
+          <span class="text-xs text-gray-500 flex-1 mono">outputs/video_images.mp4</span>
           <a href="/outputs/video_images.mp4" target="_blank"
             class="text-xs text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-            Nova aba
+            Abrir em nova aba
           </a>
-          <a id="dl-link" href="/api/video/download" download="video_images.mp4"
+          <a href="/api/video/download" download="video_images.mp4"
             class="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -702,7 +812,7 @@ function renderVideoGen() {
             Download
           </a>
         </div>
-        <video id="video-player" src="${videoDone ? videoSrc : ''}" controls preload="metadata"
+        <video id="video-player" ${videoDone ? `src="${videoSrc}"` : ''} controls preload="metadata"
           class="w-full bg-black" style="max-height:420px"
           onerror="document.getElementById('video-error').classList.remove('hidden')">
         </video>
@@ -710,7 +820,7 @@ function renderVideoGen() {
           <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-          Erro ao reproduzir no player embutido. Use
+          Erro ao reproduzir.
           <a href="/outputs/video_images.mp4" target="_blank" class="text-blue-400 underline">Nova aba</a>
           ou <a href="/api/video/download" download class="text-blue-400 underline">Download</a>.
         </div>
@@ -726,29 +836,29 @@ function updateVideoGenUI() {
   const cancel = document.getElementById('btn-cancel');
   const status = document.getElementById('term-status');
   if (!btn) return;
-
+  const approved = state.approval?.decision === 'approved';
   if (state.running) {
     btn.disabled = true;
-    btn.className = btn.className.replace('bg-blue-600 hover:bg-blue-500 text-white',
-                                          'bg-gray-800 text-gray-600 cursor-not-allowed');
+    btn.className = btn.className.replace('bg-blue-600 hover:bg-blue-500 text-white', 'bg-gray-800 text-gray-600 cursor-not-allowed');
     cancel?.classList.remove('hidden');
-    if (status) status.textContent = 'executando...';
+    if (status) status.textContent = 'executando…';
   } else {
-    btn.disabled = false;
-    btn.className = btn.className.replace('bg-gray-800 text-gray-600 cursor-not-allowed',
-                                          'bg-blue-600 hover:bg-blue-500 text-white');
+    btn.disabled = !approved;
+    if (approved) btn.className = btn.className.replace('bg-gray-800 text-gray-600 cursor-not-allowed', 'bg-blue-600 hover:bg-blue-500 text-white');
     cancel?.classList.add('hidden');
-    if (status) status.textContent = 'concluído';
-
-    const vid = document.getElementById('video-section');
-    if (vid && state.steps.find(s=>s.id===9)?.done) {
-      vid.classList.remove('hidden');
-      const player = document.getElementById('video-player');
-      if (player) {
-        document.getElementById('video-error')?.classList.add('hidden');
-        player.onerror = () => document.getElementById('video-error')?.classList.remove('hidden');
-        player.src = `/api/video?t=${Date.now()}`;
-        player.load();
+    const done = state.steps.find(s => s.id === 9)?.done;
+    if (status) status.textContent = done ? 'concluído' : 'aguardando';
+    if (done) {
+      const vid = document.getElementById('video-section');
+      if (vid) {
+        vid.classList.remove('hidden');
+        const player = document.getElementById('video-player');
+        if (player) {
+          document.getElementById('video-error')?.classList.add('hidden');
+          player.onerror = () => document.getElementById('video-error')?.classList.remove('hidden');
+          player.src = `/api/video?t=${Date.now()}`;
+          player.load();
+        }
       }
     }
   }
@@ -757,11 +867,11 @@ function updateVideoGenUI() {
 async function startVideo() {
   try {
     const r = await fetch('/api/generate', { method: 'POST' });
-    if (!r.ok) { const e = await r.json(); alert(e.detail || 'Erro'); return; }
+    if (!r.ok) { const e = await r.json(); toast(e.detail || 'Erro ao iniciar', 'error'); return; }
     await loadStatus();
     updateVideoGenUI();
     connectSSE();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 
 async function cancelVideo() {
@@ -769,6 +879,7 @@ async function cancelVideo() {
   await loadStatus();
   updateVideoGenUI();
   if (sseSource) { sseSource.close(); sseSource = null; }
+  toast('Geração cancelada.', 'warn');
 }
 
 function connectSSE() {
@@ -776,13 +887,14 @@ function connectSSE() {
   sseSource = new EventSource('/api/logs');
   const term = document.getElementById('terminal');
   if (!term) { sseSource.close(); sseSource = null; return; }
-
   sseSource.onmessage = e => {
     const div = document.createElement('div');
-    div.className = 'terminal-line';
-    if (/erro|error|fail/i.test(e.data))           div.classList.add('err');
-    else if (/✓|pronto|done|mp4|pronto/i.test(e.data)) div.classList.add('ok');
-    div.textContent = e.data;
+    const txt = e.data;
+    if (/erro|error|fail/i.test(txt))        div.className = 'term-error';
+    else if (/✓|pronto|done|mp4/i.test(txt)) div.className = 'term-done';
+    else if (/⚠|aviso|warning/i.test(txt))   div.className = 'term-warn';
+    else                                      div.className = 'text-gray-400';
+    div.textContent = txt;
     term.appendChild(div);
     term.scrollTop = term.scrollHeight;
   };
@@ -791,80 +903,69 @@ function connectSSE() {
     loadStatus().then(updateVideoGenUI);
     const s = document.getElementById('term-status');
     if (s) s.textContent = 'concluído';
+    toast('Vídeo gerado com sucesso! 🎬', 'success', 5000);
   });
   sseSource.onerror = () => { if (sseSource?.readyState === EventSource.CLOSED) sseSource = null; };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Novo Vídeo (reset modal)
+// Reset modal
 // ─────────────────────────────────────────────────────────────────────────────
 function showResetModal() {
   document.getElementById('reset-modal').classList.remove('hidden');
   document.getElementById('reset-keep-video').checked = false;
 }
-
-function closeResetModal() {
-  document.getElementById('reset-modal').classList.add('hidden');
-}
-
+function closeResetModal() { document.getElementById('reset-modal').classList.add('hidden'); }
 async function confirmReset() {
   const keepVideo = document.getElementById('reset-keep-video').checked;
   closeResetModal();
   try {
-    await fetch('/api/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keep_video: keepVideo }),
-    });
+    await fetch('/api/reset', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ keep_video: keepVideo }) });
     await loadStatus();
+    toast('Pipeline reiniciado.', 'info');
     showDashboard();
-  } catch (e) { alert('Erro ao resetar: ' + e.message); }
+  } catch (e) { toast('Erro ao resetar: ' + e.message, 'error'); }
 }
-
-// Close modal when clicking backdrop
-document.getElementById('reset-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeResetModal();
+document.getElementById('reset-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('reset-modal')) closeResetModal();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pipeline execution
 // ─────────────────────────────────────────────────────────────────────────────
 function showPipeline() {
-  activeStep = 'pipeline';
+  activeView = 'pipeline';
   renderSidebar();
   renderPipeline();
   if (state.pipe_running && !pipeSSE) connectPipeSSE();
 }
 
 function renderPipeline() {
-  const canStart   = !state.pipe_running && !state.running;
-  const step4Done  = state.steps.find(s => s.id === 4)?.done;
-  const step5Done  = state.steps.find(s => s.id === 5)?.done;
-  const approved   = state.approval?.decision === 'approved';
-  const canFinish  = step4Done && approved && !step5Done && canStart;
+  const canStart  = !state.pipe_running && !state.running;
+  const step4Done = state.steps.find(s => s.id === 4)?.done;
+  const step5Done = state.steps.find(s => s.id === 5)?.done;
+  const approved  = state.approval?.decision === 'approved';
+  const canFinish = step4Done && approved && !step5Done && canStart;
 
   document.getElementById('main').innerHTML = `
   <div class="p-6 max-w-3xl fade-in">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-5">
       <div>
-        <h2 class="text-lg font-semibold">Executar Pipeline</h2>
-        <p class="text-xs text-gray-500 mt-0.5">Coleta notícias e gera roteiro via OpenAI automaticamente</p>
+        <h2 class="text-lg font-semibold">Pipeline de Processamento</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Coleta notícias e gera roteiro automaticamente via OpenAI</p>
       </div>
       <div class="flex gap-2">
         ${canFinish ? `
-        <button id="btn-pipe-finish" onclick="pipeFinish()"
+        <button onclick="pipeFinish()"
           class="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
-          Continuar (5–7)
+          Continuar (5–7) →
         </button>` : ''}
-        <button id="btn-pipe-run" onclick="pipeRun()"
-          ${canStart ? '' : 'disabled'}
+        <button id="btn-pipe-run" onclick="pipeRun()" ${canStart ? '' : 'disabled'}
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
                  ${canStart ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          ${state.pipe_running ? 'Executando...' : 'Executar (1–4)'}
+          ${state.pipe_running ? 'Executando…' : 'Executar (1–4)'}
         </button>
         ${state.pipe_running ? `
         <button onclick="pipeCancel()"
@@ -874,66 +975,91 @@ function renderPipeline() {
       </div>
     </div>
 
-    <!-- step progress -->
-    <div class="grid grid-cols-4 gap-2 mb-5">
-      ${[1,2,3,4].map(n => {
-        const s   = state.steps.find(st => st.id === n);
-        const cls = s?.done ? 'border-green-800 bg-green-900/20 text-green-400'
-                            : state.pipe_running ? 'border-blue-800/50 bg-blue-900/10 text-blue-500/70'
-                            : 'border-gray-800 bg-gray-900/50 text-gray-600';
-        const icon = s?.done
-          ? '<svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>'
-          : `<span class="text-[10px] font-bold">${n}</span>`;
-        return `<div class="border ${cls} rounded-lg p-2.5 text-center">
-          <div class="flex items-center justify-center mb-1">${icon}</div>
-          <p class="text-[10px] truncate">${s?.name || ''}</p>
-        </div>`;
-      }).join('')}
+    <!-- Fase 1: etapas 1-4 -->
+    <p class="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-2">Fase 1 — Coleta e Roteiro</p>
+    <div class="grid grid-cols-4 gap-2 mb-4">
+      ${[1,2,3,4].map(n => _pipeCard(n)).join('')}
     </div>
 
-    <!-- terminal -->
+    <!-- Fase 2: etapas 5-7 -->
+    <p class="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-2">Fase 2 — Pós-aprovação</p>
+    <div class="grid grid-cols-3 gap-2 mb-4">
+      ${[5,6,7].map(n => _pipeCard(n)).join('')}
+    </div>
+
+    <!-- Pause / continue notice -->
+    ${step4Done && !step5Done && !approved ? `
+    <div class="bg-amber-950/20 border border-amber-900/40 rounded-xl px-4 py-3 mb-4 flex items-center gap-3 text-sm text-amber-400">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Pipeline pausado após etapa 4.
+      <button onclick="selectStep(8)" class="underline text-amber-300 hover:text-amber-200 ml-1">Aprove o roteiro →</button>
+    </div>` : ''}
+    ${step4Done && !step5Done && approved ? `
+    <div class="bg-green-950/20 border border-green-900/40 rounded-xl px-4 py-3 mb-4 flex items-center gap-3 text-sm text-green-400">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Roteiro aprovado! Clique em <strong class="mx-1">Continuar (5–7)</strong> para finalizar o pipeline.
+    </div>` : ''}
+
+    <!-- Terminal -->
     <div class="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
       <div class="px-4 py-2 border-b border-gray-800 bg-gray-900 text-xs text-gray-600 mono flex items-center gap-2">
-        <span>Terminal</span>
-        ${state.pipe_running ? '<span class="w-1.5 h-1.5 rounded-full bg-blue-400 pulse inline-block"></span><span class="text-blue-400">em execução</span>' : ''}
-        <span id="pipe-term-status" class="ml-auto"></span>
+        <span class="flex gap-1.5 mr-1">
+          <span class="w-2 h-2 rounded-full bg-red-700/50"></span>
+          <span class="w-2 h-2 rounded-full bg-yellow-700/50"></span>
+          <span class="w-2 h-2 rounded-full bg-green-700/50"></span>
+        </span>
+        run_pipeline.py
+        ${state.pipe_running ? `<span class="w-1.5 h-1.5 rounded-full bg-blue-400 pulse inline-block ml-1"></span><span class="text-blue-400">em execução</span>` : ''}
+        <span id="pipe-term-status" class="ml-auto text-gray-700"></span>
       </div>
-      <div id="pipe-terminal" class="mono text-[12px] leading-relaxed p-4 overflow-y-auto h-72 space-y-0.5">
-        <div class="text-gray-700">Aguardando execução...</div>
+      <div id="pipe-terminal" class="mono text-[12px] leading-relaxed p-4 overflow-y-auto h-64 space-y-0.5">
+        <div class="text-gray-700">Aguardando execução…</div>
       </div>
     </div>
 
     <p class="text-xs text-gray-700 mt-3">
-      Requer <code class="mono">OPENAI_API_KEY</code> configurada em
+      Requer <code class="mono">OPENAI_API_KEY</code> em
       <button onclick="showSettings()" class="text-blue-500 hover:text-blue-400 underline">Configurações</button>.
-      Etapas 1-4 custam ~$0.01 com gpt-4o-mini.
+      Custo ~$0.01–0.05 por vídeo.
     </p>
   </div>`;
 
   if (state.pipe_running && !pipeSSE) connectPipeSSE();
 }
 
+function _pipeCard(n) {
+  const s   = state.steps.find(st => st.id === n);
+  const cls = s?.done ? 'border-green-800/60 bg-green-900/10 text-green-400'
+            : state.pipe_running ? 'border-blue-800/40 bg-blue-900/5 text-blue-400/70 pulse'
+            : 'border-gray-800 text-gray-600';
+  const icon = s?.done
+    ? `<svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>`
+    : `<span class="text-[10px] font-bold">${n}</span>`;
+  return `<button onclick="selectStep(${n})" class="border ${cls} rounded-lg p-2.5 text-center hover:border-blue-700/60 transition-colors">
+    <div class="flex items-center justify-center mb-1">${icon}</div>
+    <p class="text-[10px] truncate">${s?.name || ''}</p>
+  </button>`;
+}
+
 async function pipeRun() {
   const r = await fetch('/api/pipeline/run', { method: 'POST' });
-  if (!r.ok) { const d = await r.json(); alert(d.detail); return; }
-  await loadStatus();
-  renderPipeline();
-  connectPipeSSE();
+  if (!r.ok) { const d = await r.json(); toast(d.detail, 'error'); return; }
+  await loadStatus(); renderPipeline(); connectPipeSSE();
 }
 
 async function pipeFinish() {
   const r = await fetch('/api/pipeline/finish', { method: 'POST' });
-  if (!r.ok) { const d = await r.json(); alert(d.detail); return; }
-  await loadStatus();
-  renderPipeline();
-  connectPipeSSE();
+  if (!r.ok) { const d = await r.json(); toast(d.detail, 'error'); return; }
+  await loadStatus(); renderPipeline(); connectPipeSSE();
 }
 
 async function pipeCancel() {
   await fetch('/api/pipeline/cancel', { method: 'POST' });
   if (pipeSSE) { pipeSSE.close(); pipeSSE = null; }
-  await loadStatus();
-  renderPipeline();
+  await loadStatus(); renderPipeline();
+  toast('Pipeline cancelado.', 'warn');
 }
 
 function connectPipeSSE() {
@@ -945,38 +1071,37 @@ function connectPipeSSE() {
   pipeSSE.onmessage = e => {
     const t = document.getElementById('pipe-terminal');
     if (!t) return;
-    if (t.children.length === 1 && t.children[0].textContent === 'Aguardando execução...') {
-      t.innerHTML = '';
-    }
+    if (t.children.length === 1 && t.children[0].textContent === 'Aguardando execução…') t.innerHTML = '';
     const div = document.createElement('div');
-    div.className = 'terminal-line';
     const txt = e.data;
-    if (/\[ERROR:/i.test(txt))        div.classList.add('err');
-    else if (/\[DONE:|✓|✅/i.test(txt)) div.classList.add('ok');
-    else if (/\[STEP:/i.test(txt))    div.style.color = '#93c5fd';
+    if (/\[ERROR:/i.test(txt))          div.className = 'term-error';
+    else if (/\[DONE:|✓|✅/i.test(txt)) div.className = 'term-done';
+    else if (/\[STEP:/i.test(txt))      div.className = 'term-step';
+    else if (/\[APPROVAL/i.test(txt))   div.className = 'term-warn';
+    else                                div.className = 'text-gray-400';
     div.textContent = txt;
-    t.appendChild(div);
-    t.scrollTop = t.scrollHeight;
+    t.appendChild(div); t.scrollTop = t.scrollHeight;
   };
 
   pipeSSE.addEventListener('done', async () => {
     pipeSSE.close(); pipeSSE = null;
-    await loadStatus();
-    renderPipeline();
+    await loadStatus(); renderPipeline();
     const s = document.getElementById('pipe-term-status');
     if (s) s.textContent = 'concluído';
+    const step4 = state.steps.find(st => st.id === 4)?.done;
+    const step5 = state.steps.find(st => st.id === 5)?.done;
+    if (step4 && !step5) toast('Etapas 1–4 concluídas! Revise e aprove o roteiro.', 'warn', 6000);
+    else toast('Pipeline concluído!', 'success');
   });
 
-  pipeSSE.onerror = () => {
-    if (pipeSSE?.readyState === EventSource.CLOSED) pipeSSE = null;
-  };
+  pipeSSE.onerror = () => { if (pipeSSE?.readyState === EventSource.CLOSED) pipeSSE = null; };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Settings (API keys)
+// Settings
 // ─────────────────────────────────────────────────────────────────────────────
 async function showSettings() {
-  activeStep = 'settings';
+  activeView = 'settings';
   renderSidebar();
   document.getElementById('main').innerHTML = loadingView('Configurações');
   const cfg = await fetch('/api/config').then(r => r.json());
@@ -990,24 +1115,21 @@ function renderSettingsView(cfg) {
       <h2 class="text-lg font-semibold">Configurações</h2>
       <p class="text-xs text-gray-500 mt-0.5">Gerencie as chaves de API utilizadas pelo pipeline</p>
     </div>
-
     <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
       <div class="flex items-center justify-between mb-4">
         <div>
           <p class="text-sm font-medium">OpenAI API Key</p>
-          <p class="text-xs text-gray-500 mt-0.5">Necessária para as etapas 2–5 do pipeline (gpt-4o-mini)</p>
+          <p class="text-xs text-gray-500 mt-0.5">Necessária para as etapas 2–7 do pipeline (gpt-4o-mini)</p>
         </div>
-        <span class="px-2 py-0.5 text-[10px] rounded-full border ${cfg.openai_key_set
-          ? 'border-green-800 bg-green-900/30 text-green-400'
-          : 'border-gray-700 bg-gray-800 text-gray-500'}">
-          ${cfg.openai_key_set ? '✓ Configurada' : 'Não configurada'}
+        <span class="px-2 py-0.5 text-[10px] rounded-full border
+          ${cfg.openai_key_set ? 'border-green-800 bg-green-900/30 text-green-400' : 'border-red-900 bg-red-900/20 text-red-400'}">
+          ${cfg.openai_key_set ? '✓ Configurada' : '✗ Não configurada'}
         </span>
       </div>
-      ${cfg.openai_key_set ? `
-      <p class="text-xs text-gray-600 mono mb-4">${cfg.openai_key_preview}</p>` : ''}
+      ${cfg.openai_key_set ? `<p class="text-xs text-gray-600 mono mb-4">${cfg.openai_key_preview}</p>` : ''}
       <div class="flex gap-2">
         <input id="openai-key-input" type="password" autocomplete="off"
-          placeholder="${cfg.openai_key_set ? 'Nova chave (deixe vazio para manter)' : 'sk-...'}"
+          placeholder="${cfg.openai_key_set ? 'Nova chave (vazio = manter atual)' : 'sk-...'}"
           class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
                  placeholder-gray-600 focus:outline-none focus:border-blue-600 mono"/>
         <button onclick="saveOpenAIKey()"
@@ -1017,13 +1139,12 @@ function renderSettingsView(cfg) {
       </div>
       <p id="settings-msg" class="text-xs mt-2 hidden"></p>
     </div>
-
     <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-600">
       <p class="font-medium text-gray-500 mb-2">Como obter uma chave OpenAI</p>
       <ol class="space-y-1 list-decimal list-inside">
         <li>Acesse <span class="mono text-gray-500">platform.openai.com/api-keys</span></li>
         <li>Crie uma nova chave secreta</li>
-        <li>Adicione crédito mínimo (~$5) em <span class="mono text-gray-500">platform.openai.com/billing</span></li>
+        <li>Adicione crédito (~$5) em <span class="mono text-gray-500">platform.openai.com/billing</span></li>
         <li>Cole a chave acima e salve</li>
       </ol>
       <p class="mt-2 text-gray-700">Custo estimado por vídeo: ~$0.01–0.05 com gpt-4o-mini</p>
@@ -1033,49 +1154,39 @@ function renderSettingsView(cfg) {
 
 async function saveOpenAIKey() {
   const val = document.getElementById('openai-key-input')?.value.trim();
-  const msg = document.getElementById('settings-msg');
-  if (!val) {
-    if (msg) { msg.textContent = 'Insira a chave antes de salvar.'; msg.className = 'text-xs mt-2 text-red-400'; }
-    return;
-  }
+  if (!val) { toast('Insira a chave antes de salvar.', 'warn'); return; }
   try {
-    await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ openai_api_key: val }),
-    });
-    if (msg) { msg.textContent = '✓ Chave salva com sucesso!'; msg.className = 'text-xs mt-2 text-green-400'; }
+    await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ openai_api_key: val }) });
+    toast('Chave salva com sucesso!', 'success');
     document.getElementById('openai-key-input').value = '';
-    setTimeout(() => showSettings(), 1200);
-  } catch (e) {
-    if (msg) { msg.textContent = 'Erro ao salvar: ' + e.message; msg.className = 'text-xs mt-2 text-red-400'; }
-  }
+    setTimeout(() => showSettings(), 800);
+  } catch (e) { toast('Erro ao salvar: ' + e.message, 'error'); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sources management
+// Sources
 // ─────────────────────────────────────────────────────────────────────────────
 let sourcesData = [];
 
 async function showSources() {
-  activeStep = 'sources';
+  activeView = 'sources';
   renderSidebar();
   document.getElementById('main').innerHTML = loadingView('Fontes de Notícias');
   try {
-    const r = await fetch('/api/sources');
-    const d = await r.json();
+    const d = await fetch('/api/sources').then(r => r.json());
     sourcesData = d.sources || [];
     renderSourcesView();
   } catch (e) { renderError('Erro ao carregar fontes: ' + e.message); }
 }
 
 function renderSourcesView() {
+  const active = sourcesData.filter(s => s.enabled).length;
   document.getElementById('main').innerHTML = `
   <div class="p-6 max-w-3xl fade-in">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-5">
       <div>
         <h2 class="text-lg font-semibold">Fontes de Notícias</h2>
-        <p class="text-xs text-gray-500 mt-0.5">${sourcesData.length} fonte(s) configurada(s)</p>
+        <p class="text-xs text-gray-500 mt-0.5">${sourcesData.length} fonte(s) · ${active} ativa(s)</p>
       </div>
       <button onclick="addSourceRow()"
         class="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
@@ -1084,9 +1195,7 @@ function renderSourcesView() {
         Adicionar
       </button>
     </div>
-
     <div id="sources-list" class="space-y-3"></div>
-
     <div id="add-form" class="hidden mt-4 bg-gray-900 border border-blue-900/60 rounded-xl p-5 fade-in">
       <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Nova fonte</p>
       <div class="grid grid-cols-2 gap-3 mb-3">
@@ -1105,47 +1214,42 @@ function renderSourcesView() {
         </div>
       </div>
       <div class="mb-3">
-        <label class="text-xs text-gray-500 mb-1 block">URL do Feed / Site</label>
+        <label class="text-xs text-gray-500 mb-1 block">URL do Feed</label>
         <input id="new-url" type="url" placeholder="https://..."
           class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-600"/>
       </div>
       <div class="flex gap-2 justify-end">
         <button onclick="cancelAddSource()"
-          class="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-400 hover:bg-gray-800 transition-colors">
-          Cancelar
-        </button>
+          class="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-400 hover:bg-gray-800 transition-colors">Cancelar</button>
         <button onclick="saveNewSource()"
-          class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
-          Salvar
-        </button>
+          class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">Salvar</button>
       </div>
     </div>
   </div>`;
-
   renderSourcesList();
 }
 
 function renderSourcesList() {
   const list = document.getElementById('sources-list');
   if (!list) return;
-  if (sourcesData.length === 0) {
+  if (!sourcesData.length) {
     list.innerHTML = `<div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500 text-sm">
-      Nenhuma fonte configurada. Adicione uma fonte acima.</div>`;
+      Nenhuma fonte configurada.</div>`;
     return;
   }
   list.innerHTML = sourcesData.map((src, i) => `
-  <div class="bg-gray-900 border ${src.enabled ? 'border-gray-800' : 'border-gray-800/40 opacity-60'} rounded-xl p-4">
+  <div class="bg-gray-900 border ${src.enabled ? 'border-gray-800' : 'border-gray-800/40 opacity-50'} rounded-xl p-4">
     <div class="flex items-start gap-3">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 mb-1">
           <span class="font-medium text-sm">${escHtml(src.name)}</span>
-          <span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono uppercase">${src.type}</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 mono uppercase">${src.type}</span>
           ${src.enabled
             ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-green-900/40 text-green-500 border border-green-900/50">ativo</span>`
             : `<span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-600">inativo</span>`}
         </div>
         <p class="text-xs text-gray-600 mono truncate">${escHtml(src.feed_url || src.url || '')}</p>
-        <div id="test-result-${i}" class="mt-1.5 text-xs hidden"></div>
+        <div id="test-result-${i}" class="mt-1 text-xs hidden"></div>
       </div>
       <div class="flex items-center gap-1 flex-shrink-0">
         <button onclick="testSource(${i})" id="test-btn-${i}"
@@ -1153,11 +1257,12 @@ function renderSourcesList() {
           Testar
         </button>
         <button onclick="toggleSource(${i})"
-          class="px-2.5 py-1.5 rounded-lg text-xs border border-gray-700 ${src.enabled ? 'text-gray-400 hover:text-red-400 hover:border-red-900' : 'text-gray-500 hover:text-green-400 hover:border-green-900'} transition-colors">
+          class="px-2.5 py-1.5 rounded-lg text-xs border border-gray-700
+                 ${src.enabled ? 'text-gray-400 hover:text-red-400 hover:border-red-900' : 'text-gray-500 hover:text-green-400 hover:border-green-900'} transition-colors">
           ${src.enabled ? 'Desativar' : 'Ativar'}
         </button>
         <button onclick="deleteSource(${i})"
-          class="p-1.5 rounded-lg text-xs border border-gray-700 text-gray-600 hover:text-red-400 hover:border-red-900 transition-colors">
+          class="p-1.5 rounded-lg border border-gray-700 text-gray-600 hover:text-red-400 hover:border-red-900 transition-colors">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -1169,76 +1274,43 @@ function renderSourcesList() {
 
 async function testSource(i) {
   const src = sourcesData[i];
-  const url = src.feed_url || src.url;
   const btn = document.getElementById(`test-btn-${i}`);
   const res = document.getElementById(`test-result-${i}`);
   if (!btn || !res) return;
-
-  btn.disabled = true;
-  btn.textContent = '...';
-  res.className = 'mt-1.5 text-xs';
-  res.textContent = 'Testando...';
-
+  btn.disabled = true; btn.textContent = '…';
+  res.className = 'mt-1 text-xs'; res.textContent = 'Testando…'; res.classList.remove('hidden');
   try {
-    const r = await fetch('/api/sources/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    const d = await r.json();
-    if (d.ok) {
-      res.className = 'mt-1.5 text-xs text-green-400';
-      res.textContent = `✓ Online (HTTP ${d.status})`;
-    } else {
-      res.className = 'mt-1.5 text-xs text-red-400';
-      res.textContent = d.error ? `✗ ${d.error}` : `✗ HTTP ${d.status}`;
-    }
-  } catch (e) {
-    res.className = 'mt-1.5 text-xs text-red-400';
-    res.textContent = `✗ Erro: ${e.message}`;
-  }
-  btn.disabled = false;
-  btn.textContent = 'Testar';
+    const d = await fetch('/api/sources/test', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ url: src.feed_url || src.url }),
+    }).then(r => r.json());
+    if (d.ok) { res.className = 'mt-1 text-xs text-green-400'; res.textContent = `✓ Online (HTTP ${d.status})`; }
+    else       { res.className = 'mt-1 text-xs text-red-400';   res.textContent = d.error ? `✗ ${d.error}` : `✗ HTTP ${d.status}`; }
+  } catch (e) { res.className = 'mt-1 text-xs text-red-400'; res.textContent = `✗ ${e.message}`; }
+  btn.disabled = false; btn.textContent = 'Testar';
 }
 
-function toggleSource(i) {
-  sourcesData[i].enabled = !sourcesData[i].enabled;
-  saveSources().then(() => renderSourcesList());
+function toggleSource(i) { sourcesData[i].enabled = !sourcesData[i].enabled; saveSources().then(renderSourcesList); }
+async function deleteSource(i) {
+  const ok = await showConfirm('Remover fonte', `Remover "${sourcesData[i].name}"?`, 'Remover', true);
+  if (!ok) return;
+  sourcesData.splice(i, 1); await saveSources(); renderSourcesList();
 }
-
-function deleteSource(i) {
-  if (!confirm(`Remover "${sourcesData[i].name}"?`)) return;
-  sourcesData.splice(i, 1);
-  saveSources().then(() => renderSourcesList());
-}
-
-function addSourceRow() {
-  document.getElementById('add-form')?.classList.remove('hidden');
-}
-
-function cancelAddSource() {
-  document.getElementById('add-form')?.classList.add('hidden');
-}
-
+function addSourceRow()    { document.getElementById('add-form')?.classList.remove('hidden'); }
+function cancelAddSource() { document.getElementById('add-form')?.classList.add('hidden'); }
 async function saveNewSource() {
   const name = document.getElementById('new-name')?.value.trim();
   const url  = document.getElementById('new-url')?.value.trim();
   const type = document.getElementById('new-type')?.value || 'rss';
-  if (!name || !url) { alert('Preencha nome e URL.'); return; }
-  sourcesData.push({ name, url, feed_url: url, type, country: 'BR', language: 'pt-BR', enabled: true });
-  await saveSources();
-  cancelAddSource();
-  renderSourcesList();
+  if (!name || !url) { toast('Preencha nome e URL.', 'warn'); return; }
+  sourcesData.push({ name, url, feed_url: url, type, country:'BR', language:'pt-BR', enabled: true });
+  await saveSources(); cancelAddSource(); renderSourcesList();
   document.getElementById('new-name').value = '';
   document.getElementById('new-url').value  = '';
+  toast(`Fonte "${name}" adicionada.`, 'success');
 }
-
 async function saveSources() {
-  await fetch('/api/sources', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sources: sourcesData }),
-  });
+  await fetch('/api/sources', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ sources: sourcesData }) });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1256,32 +1328,22 @@ function syntaxHighlight(obj, depth = 0) {
   }
   const keys = Object.keys(obj);
   if (!keys.length) return '{}';
-  const items = keys.map(k => `${pad}<span class="jk">"${escHtml(k)}"</span>: ${syntaxHighlight(obj[k], depth+1)}`);
-  return `{\n${items.join(',\n')}\n${cpad}}`;
+  return `{\n${keys.map(k => `${pad}<span class="jk">"${escHtml(k)}"</span>: ${syntaxHighlight(obj[k], depth+1)}`).join(',\n')}\n${cpad}}`;
 }
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-function loadingView(title) {
+function loadingView(t) {
   return `<div class="p-6 flex items-center gap-3 text-gray-500 fade-in">
     <span class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full spin"></span>
-    <span class="text-sm">${title}...</span>
-  </div>`;
+    <span class="text-sm">${t}…</span></div>`;
 }
-
 function renderError(msg) {
-  document.getElementById('main').innerHTML = `
-  <div class="p-6"><div class="bg-red-950/30 border border-red-900 rounded-xl p-5 text-red-400 text-sm">${msg}</div></div>`;
+  document.getElementById('main').innerHTML = `<div class="p-6"><div class="bg-red-950/30 border border-red-900 rounded-xl p-5 text-red-400 text-sm">${msg}</div></div>`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Start
-// ─────────────────────────────────────────────────────────────────────────────
 init();
 </script>
 </body>
