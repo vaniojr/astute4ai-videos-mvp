@@ -347,6 +347,22 @@ async def api_pipeline_run():
     return {"started": True}
 
 
+@app.post("/api/pipeline/run-from/{step_num}")
+async def api_pipeline_run_from(step_num: int):
+    global _pipe_running
+    if _pipe_running:
+        raise HTTPException(status_code=409, detail="Pipeline já em execução")
+    if step_num < 1 or step_num > 7:
+        raise HTTPException(status_code=400, detail="Etapa inválida (1-7)")
+    _pipe_logs.clear()
+    _pipe_running = True
+    if step_num >= 5:
+        asyncio.create_task(_pipe_launch(["--from-step", str(step_num)]))
+    else:
+        asyncio.create_task(_pipe_launch(["--from-step", str(step_num)]))
+    return {"started": True, "from_step": step_num}
+
+
 @app.post("/api/pipeline/finish")
 async def api_pipeline_finish():
     global _pipe_running
@@ -356,6 +372,11 @@ async def api_pipeline_finish():
     _pipe_running = True
     asyncio.create_task(_pipe_launch(["--finish"]))
     return {"started": True}
+
+
+@app.get("/api/pipeline/logs-snapshot")
+async def api_pipeline_logs_snapshot():
+    return {"logs": list(_pipe_logs), "running": _pipe_running}
 
 
 @app.post("/api/pipeline/cancel")

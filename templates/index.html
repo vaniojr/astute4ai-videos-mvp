@@ -242,54 +242,182 @@ function stepIcon(s) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────────────────────────────────────────
-function showDashboard() {
+async function showDashboard() {
   activeStep = null;
   renderSidebar();
+  _renderDashboardShell();
+  // fetch logs async without blocking the paint
+  try {
+    const r = await fetch('/api/pipeline/logs-snapshot');
+    const d = await r.json();
+    _renderDashboardLog(d.logs, d.running);
+  } catch (_) {}
+}
+
+function _renderDashboardShell() {
   const done     = state.steps.filter(s => s.done).length;
   const total    = state.steps.length;
   const pct      = Math.round((done / total) * 100);
   const approved = state.approval?.decision === 'approved';
   const rejected = state.approval?.decision === 'rejected';
 
-  document.getElementById('main').innerHTML = `
-  <div class="max-w-2xl mx-auto p-8 fade-in">
-    <h1 class="text-2xl font-bold mb-1">Dashboard</h1>
-    <p class="text-gray-500 text-sm mb-8">Acompanhe e controle o pipeline de geração de vídeos.</p>
+  // pipeline steps 1-7 only (8=approval, 9=video are special)
+  const pipeSteps = state.steps.filter(s => s.id >= 1 && s.id <= 7);
 
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-sm font-medium">Progresso do pipeline</span>
-        <span class="text-sm font-bold text-blue-400">${done} / ${total}</span>
+  document.getElementById('main').innerHTML = `
+  <div class="max-w-3xl mx-auto p-6 fade-in">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-xl font-bold">Dashboard</h1>
+        <p class="text-gray-500 text-xs mt-0.5">Acompanhe e controle o pipeline</p>
       </div>
-      <div class="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-        <div class="h-full bg-blue-600 rounded-full transition-all" style="width:${pct}%"></div>
-      </div>
-      <p class="mt-2 text-xs text-gray-600">${pct}% concluído</p>
+      <button onclick="showDashboard()" class="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Atualizar
+      </button>
     </div>
 
-    <div class="grid grid-cols-3 gap-4 mb-6">
-      ${statCard('Etapas', `${done}/${total}`, 'text-blue-400')}
+    <!-- Stats row -->
+    <div class="grid grid-cols-4 gap-3 mb-5">
+      ${statCard('Progresso', `${done}/${total}`, 'text-blue-400')}
       ${statCard('Aprovação',
           state.approval ? (approved ? 'Aprovado' : 'Rejeitado') : 'Pendente',
           approved ? 'text-green-400' : rejected ? 'text-red-400' : 'text-gray-500')}
       ${statCard('Vídeo',
           state.steps.find(s=>s.id===9)?.done ? 'Pronto' : 'Pendente',
           state.steps.find(s=>s.id===9)?.done ? 'text-green-400' : 'text-gray-500')}
+      ${statCard('Pipeline', state.pipe_running ? 'Rodando' : 'Parado',
+          state.pipe_running ? 'text-yellow-400' : 'text-gray-500')}
     </div>
 
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Ações rápidas</p>
-      <div class="space-y-2">
-        ${quickAction('pipeline', 'Executar Pipeline', 'Coleta notícias e gera roteiro via OpenAI',
-            'M13 10V3L4 14h7v7l9-11h-7z', 'text-blue-400')}
-        ${quickAction(8, 'Aprovar Roteiro', 'Revise e aprove o script gerado',
-            'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'text-green-400')}
-        ${quickAction(9, 'Gerar Vídeo', 'Execute generate_video_images.py com logs ao vivo',
-            'M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z',
-            'text-purple-400')}
+    <!-- Progress bar -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3 mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-gray-500">Progresso geral</span>
+        <span class="text-xs font-bold text-blue-400">${pct}%</span>
+      </div>
+      <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div class="h-full bg-blue-600 rounded-full transition-all" style="width:${pct}%"></div>
+      </div>
+    </div>
+
+    <!-- Pipeline steps table -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-5">
+      <div class="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Etapas do Pipeline</p>
+        <button onclick="runFromStep(1)" ${state.pipe_running ? 'disabled' : ''}
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                 ${state.pipe_running ? 'text-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} transition-colors">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Executar do zero
+        </button>
+      </div>
+      <div class="divide-y divide-gray-800/60">
+        ${pipeSteps.map(s => _stepRow(s)).join('')}
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-5">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Ações</p>
+      <div class="flex flex-wrap gap-2">
+        ${quickBtn(8, 'Aprovar Roteiro', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', 'text-green-400')}
+        ${quickBtn(9, 'Gerar Vídeo', 'M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z', 'text-purple-400')}
+      </div>
+    </div>
+
+    <!-- Log panel (populated async) -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <button onclick="toggleLog()" class="w-full flex items-center justify-between px-5 py-3 border-b border-gray-800">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Log do Pipeline</p>
+        <svg id="log-chevron" class="w-4 h-4 text-gray-600 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="log-panel" class="hidden">
+        <div id="dash-log" class="mono text-[11px] leading-5 p-4 max-h-80 overflow-y-auto bg-gray-950 text-gray-400">
+          <span class="text-gray-700">Carregando logs...</span>
+        </div>
       </div>
     </div>
   </div>`;
+}
+
+function _stepRow(s) {
+  const isRunning = state.pipe_running;
+  const statusIcon = s.done
+    ? `<span class="w-5 h-5 rounded-full bg-green-700 flex items-center justify-center flex-shrink-0">
+         <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></span>`
+    : `<span class="w-5 h-5 rounded-full border border-gray-700 flex items-center justify-center flex-shrink-0 text-[10px] text-gray-600 font-bold">${s.id}</span>`;
+
+  return `
+  <div class="flex items-center gap-3 px-5 py-3 hover:bg-gray-800/40 transition-colors">
+    ${statusIcon}
+    <button onclick="selectStep(${s.id})" class="flex-1 text-left">
+      <span class="text-sm ${s.done ? 'text-gray-200' : 'text-gray-500'}">${s.name}</span>
+      <span class="ml-2 text-[9px] text-gray-700 mono">${s.output}</span>
+    </button>
+    <div class="flex items-center gap-1.5 flex-shrink-0">
+      ${s.done ? `
+      <span class="text-[10px] text-green-600 font-medium">✓ concluído</span>` : `
+      <span class="text-[10px] text-gray-700">pendente</span>`}
+      <button onclick="runFromStep(${s.id})" ${isRunning ? 'disabled' : ''}
+        title="Executar a partir da etapa ${s.id}"
+        class="flex items-center gap-1 px-2 py-1 rounded text-[10px] border ml-2
+               ${isRunning ? 'border-gray-800 text-gray-700 cursor-not-allowed'
+                           : 'border-gray-700 text-gray-400 hover:border-blue-700 hover:text-blue-400'} transition-colors">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+        Executar daqui
+      </button>
+    </div>
+  </div>`;
+}
+
+function _renderDashboardLog(logs, running) {
+  const panel = document.getElementById('dash-log');
+  if (!panel) return;
+  if (!logs || !logs.length) {
+    panel.innerHTML = '<span class="text-gray-700">Nenhum log disponível. Execute o pipeline.</span>';
+    return;
+  }
+  panel.innerHTML = logs.map(line => {
+    let cls = 'text-gray-400';
+    if (line.startsWith('[STEP:'))    cls = 'text-blue-400 font-bold';
+    else if (line.startsWith('[DONE:'))  cls = 'text-green-400';
+    else if (line.startsWith('[ERROR:')) cls = 'text-red-400 font-bold';
+    else if (line.includes('✅'))         cls = 'text-green-300 font-bold';
+    else if (line.includes('✗') || line.includes('ERRO') || line.toLowerCase().includes('error')) cls = 'text-red-400';
+    else if (line.includes('⏸') || line.includes('[APPROVAL'))  cls = 'text-yellow-400';
+    else if (line.startsWith('==='))      cls = 'text-gray-600';
+    return `<div class="${cls}">${escHtml(line)}</div>`;
+  }).join('');
+  if (running) {
+    panel.innerHTML += '<div class="text-yellow-400 mt-1">▸ executando...</div>';
+  }
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function toggleLog() {
+  const panel = document.getElementById('log-panel');
+  const chevron = document.getElementById('log-chevron');
+  if (!panel) return;
+  panel.classList.toggle('hidden');
+  chevron?.classList.toggle('rotate-180');
+}
+
+async function runFromStep(n) {
+  if (state.pipe_running) return;
+  const label = n === 1 ? 'Executar pipeline do zero' : `Executar a partir da etapa ${n}`;
+  if (!confirm(`${label}?\nOs logs anteriores serão substituídos.`)) return;
+  try {
+    const r = await fetch(`/api/pipeline/run-from/${n}`, { method: 'POST' });
+    if (!r.ok) { const e = await r.json(); alert(e.detail || 'Erro'); return; }
+    await loadStatus();
+    showPipeline();   // switch to pipeline view with live terminal
+  } catch (e) { alert('Erro: ' + e.message); }
 }
 
 function statCard(label, value, cls) {
@@ -297,6 +425,18 @@ function statCard(label, value, cls) {
     <p class="text-[11px] text-gray-600 mb-1">${label}</p>
     <p class="text-lg font-bold ${cls}">${value}</p>
   </div>`;
+}
+
+function quickBtn(stepId, title, iconPath, iconCls) {
+  return `
+  <button onclick="selectStep(${stepId})"
+    class="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700
+           hover:border-blue-700 hover:bg-blue-950/30 transition-all text-xs text-left">
+    <svg class="w-3.5 h-3.5 ${iconCls} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}"/>
+    </svg>
+    <span class="font-medium">${title}</span>
+  </button>`;
 }
 
 function quickAction(stepId, title, sub, iconPath, iconCls) {

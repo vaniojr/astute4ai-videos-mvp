@@ -257,62 +257,66 @@ def build_publish_payload():
 
 # ── Pipeline halves ────────────────────────────────────────────────────────────
 
-def run_first_half():
+def run_first_half(from_step: int = 1):
     """Etapas 1-4. Para em [APPROVAL_REQUIRED] se necessário."""
     config = json.loads((CONFIGS / "default_video_request.json").read_text(encoding="utf-8"))
 
     log("=" * 52)
-    log("  Astute4AI Videos — Pipeline (etapas 1–4)")
+    log(f"  Astute4AI Videos — Pipeline (etapas {from_step}–4)")
     log("=" * 52)
     log()
 
-    collect_news()
-    log()
+    if from_step <= 1:
+        collect_news()
+        log()
 
-    run_ai_stage(
-        2, "News Curator", "02_news_curator.md",
-        ["collected_news.json"],
-        "curated_news.json",
-        "Retorne JSON com chave 'items' (array de 3-5 notícias curadas), cada uma com: "
-        "title, source, url, date, summary, relevance_reason.",
-    )
-    log()
+    if from_step <= 2:
+        run_ai_stage(
+            2, "News Curator", "02_news_curator.md",
+            ["collected_news.json"],
+            "curated_news.json",
+            "Retorne JSON com chave 'items' (array de 3-5 notícias curadas), cada uma com: "
+            "title, source, url, date, summary, relevance_reason.",
+        )
+        log()
 
-    presenter = json.loads((CONFIGS / "presenter.json").read_text(encoding="utf-8"))
-    run_ai_stage(
-        3, "Script Writer", "03_script_writer.md",
-        ["curated_news.json"],
-        "script.json",
-        f"Config: {json.dumps(config)}\nPresenter: {json.dumps(presenter)}\n"
-        "REQUISITOS OBRIGATÓRIOS DE DURAÇÃO:\n"
-        "- Vídeo com MÍNIMO 6 minutos (nunca abaixo disso)\n"
-        "- Cada news_block: mínimo 180 palavras (aprofunde contexto, causas, impacto, desdobramentos)\n"
-        "- Total do roteiro: mínimo 800 palavras\n"
-        "- Velocidade de leitura: ~130 palavras/minuto\n\n"
-        "Retorne JSON com:\n"
-        "  segments: array de objetos com campos:\n"
-        "    - type: 'intro' | 'news_block' | 'transition' | 'outro'\n"
-        "    - text: string (mínimo 180 palavras para news_block)\n"
-        "    - news_ref: string 1-N (somente em news_block)\n"
-        "    - image_query: string com 3-5 palavras em INGLÊS descrevendo "
-        "a cena visual ideal para este segmento — seja específico e descritivo "
-        "(ex: 'brazil congress vote politicians chamber', 'flood rescue victims rio grande', "
-        "'supreme court judge brazil gavel', 'inflation market prices supermarket brazil')\n"
-        "  estimated_duration_min: número\n"
-        "  word_count: número total de palavras no roteiro\n"
-        "  sources: array de strings\n",
-    )
-    log()
+    if from_step <= 3:
+        presenter = json.loads((CONFIGS / "presenter.json").read_text(encoding="utf-8"))
+        run_ai_stage(
+            3, "Script Writer", "03_script_writer.md",
+            ["curated_news.json"],
+            "script.json",
+            f"Config: {json.dumps(config)}\nPresenter: {json.dumps(presenter)}\n"
+            "REQUISITOS OBRIGATÓRIOS DE DURAÇÃO:\n"
+            "- Vídeo com MÍNIMO 6 minutos (nunca abaixo disso)\n"
+            "- Cada news_block: mínimo 180 palavras (aprofunde contexto, causas, impacto, desdobramentos)\n"
+            "- Total do roteiro: mínimo 800 palavras\n"
+            "- Velocidade de leitura: ~130 palavras/minuto\n\n"
+            "Retorne JSON com:\n"
+            "  segments: array de objetos com campos:\n"
+            "    - type: 'intro' | 'news_block' | 'transition' | 'outro'\n"
+            "    - text: string (mínimo 180 palavras para news_block)\n"
+            "    - news_ref: string 1-N (somente em news_block)\n"
+            "    - image_query: string com 3-5 palavras em INGLÊS descrevendo "
+            "a cena visual ideal para este segmento — seja específico e descritivo "
+            "(ex: 'brazil congress vote politicians chamber', 'flood rescue victims rio grande', "
+            "'supreme court judge brazil gavel', 'inflation market prices supermarket brazil')\n"
+            "  estimated_duration_min: número\n"
+            "  word_count: número total de palavras no roteiro\n"
+            "  sources: array de strings\n",
+        )
+        log()
 
-    run_ai_stage(
-        4, "Editorial Validator", "04_editorial_validator.md",
-        ["script.json", "curated_news.json"],
-        "script_validated.json",
-        "Retorne o mesmo JSON do script.json com campo adicional 'validation': "
-        "{'passed': bool, 'checks': {sources_cited, no_literal_copy, duration_ok, "
-        "tone_ok, factual_ok, sources_used_only}, 'notes': ''}.",
-    )
-    log()
+    if from_step <= 4:
+        run_ai_stage(
+            4, "Editorial Validator", "04_editorial_validator.md",
+            ["script.json", "curated_news.json"],
+            "script_validated.json",
+            "Retorne o mesmo JSON do script.json com campo adicional 'validation': "
+            "{'passed': bool, 'checks': {sources_cited, no_literal_copy, duration_ok, "
+            "tone_ok, factual_ok, sources_used_only}, 'notes': ''}.",
+        )
+        log()
 
     if config.get("approval_required", False):
         log("⏸  Roteiro aguardando aprovação na Etapa 8.")
@@ -321,28 +325,31 @@ def run_first_half():
         run_second_half()
 
 
-def run_second_half():
+def run_second_half(from_step: int = 5):
     """Etapas 5-7. Executar após aprovação do roteiro."""
     log("=" * 52)
-    log("  Astute4AI Videos — Pipeline (etapas 5–7)")
+    log(f"  Astute4AI Videos — Pipeline (etapas {from_step}–7)")
     log("=" * 52)
     log()
 
-    run_ai_stage(
-        5, "Content Packager", "05_content_packager.md",
-        ["script_validated.json"],
-        "content_package.json",
-        "Retorne JSON com: title (string), description (string ≤500 chars), "
-        "hashtags (array ≤15 strings), chapters (array de {time, title}), "
-        "thumbnail_text (string curta para capa).",
-    )
-    log()
+    if from_step <= 5:
+        run_ai_stage(
+            5, "Content Packager", "05_content_packager.md",
+            ["script_validated.json"],
+            "content_package.json",
+            "Retorne JSON com: title (string), description (string ≤500 chars), "
+            "hashtags (array ≤15 strings), chapters (array de {time, title}), "
+            "thumbnail_text (string curta para capa).",
+        )
+        log()
 
-    build_video_payload()
-    log()
+    if from_step <= 6:
+        build_video_payload()
+        log()
 
-    build_publish_payload()
-    log()
+    if from_step <= 7:
+        build_publish_payload()
+        log()
 
     log("✅ Pipeline completo! Acesse a Etapa 9 para gerar o vídeo.")
     print("[PIPELINE_DONE]", flush=True)
@@ -351,8 +358,17 @@ def run_second_half():
 # ── entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    mode = sys.argv[1] if len(sys.argv) > 1 else ""
-    if mode == "--finish":
+    args = sys.argv[1:]
+
+    from_step = 1
+    if "--from-step" in args:
+        idx = args.index("--from-step")
+        if idx + 1 < len(args):
+            from_step = int(args[idx + 1])
+
+    if "--finish" in args:
         run_second_half()
+    elif from_step >= 5:
+        run_second_half(from_step=from_step)
     else:
-        run_first_half()
+        run_first_half(from_step=from_step)
